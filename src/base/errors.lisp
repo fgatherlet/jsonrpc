@@ -1,31 +1,13 @@
-(in-package #:cl-user)
-(defpackage #:jsonrpc/errors
-  (:use #:cl)
-  (:import-from #:yason)
-  (:export #:jsonrpc-error
-           #:jsonrpc-parse-error
-           #:jsonrpc-invalid-request
-           #:jsonrpc-invalid-response
-           #:jsonrpc-method-not-found
-           #:jsonrpc-invalid-params
-           #:jsonrpc-internal-error
-           #:jsonrpc-server-error
-           #:jsonrpc-callback-error
-           #:jsonrpc-error-code
-           #:jsonrpc-error-message
-           #:*debug-on-error*))
-(in-package #:jsonrpc/errors)
+(in-package #:jsonrpc)
 
 (defvar *debug-on-error* nil
   "Open an interactive debugger on any error.")
 
 (define-condition jsonrpc-error (error)
   ((code :initarg :code
-         :initform -1
-         :accessor jsonrpc-error-code)
+         :initform -1)
    (message :initarg :message
-            :initform ""
-            :accessor jsonrpc-error-message)))
+            :initform "")))
 
 (define-condition jsonrpc-parse-error (jsonrpc-error)
   ((code :initform -32700)
@@ -58,8 +40,7 @@
              (with-slots (message code) condition
                (format stream "JSONRPC-CALLBACK-ERROR: ~A (Code=~A)" message code)))))
 
-(defmethod yason:encode ((object jsonrpc-error) &optional stream)
-  (yason:with-output (stream)
-    (yason:with-object ()
-      (yason:encode-object-element "code" (jsonrpc-error-code object))
-      (yason:encode-object-element "message" (jsonrpc-error-message object)))))
+(defmethod jsown:to-json ((obj jsonrpc-error))
+  (jsown:to-json
+   `(:obj ("code" . ,(slot-value obj 'code))
+          ("message" . ,(slot-value obj 'message)))))

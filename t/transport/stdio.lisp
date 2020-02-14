@@ -22,8 +22,8 @@
                    (jsonrpc:expose server "sum" (lambda (args) (reduce #'+ args)))
                    (jsonrpc:server-listen server
                                           :mode :stdio
-                                          :input (sb-sys:make-fd-stream inputfd-1 :input t)
-                                          :output (sb-sys:make-fd-stream outputfd-2 :output t))))))
+                                          :input (sb-sys:make-fd-stream inputfd-1 :input t :element-type :default)
+                                          :output (sb-sys:make-fd-stream outputfd-2 :output t :element-type :default))))))
             (client (jsonrpc:make-client)))
         (unwind-protect
              (progn
