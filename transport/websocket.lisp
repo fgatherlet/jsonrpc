@@ -113,7 +113,8 @@
          (connection (make-instance 'connection
                                     :socket client
                                     :request-callback
-                                    (transport-message-callback transport))))
+                                    (transport-message-callback transport)))
+         (need-response-jsonrpc-p (transport-need-response-jsonrpc-p transport)))
     (on :open client
         (lambda ()
           (emit :open transport connection)))
@@ -126,7 +127,7 @@
 
     (on :message client
         (lambda (input)
-          (let ((message (parse-message input)))
+          (let ((message (parse-message input :need-jsonrpc-p need-response-jsonrpc-p)))
             (when message
               (add-message-to-queue connection message)))))
 

@@ -66,8 +66,10 @@
                 (find key '("jsonrpc" "method" "params" "id") :test #'string=))
               (hash-table-keys request))))
 
-(defun valid-response-p (response)
-  (and (equal (gethash "jsonrpc" response) "2.0")
+(defun valid-response-p (response &key (need-jsonrpc-p t))
+  (and (if need-jsonrpc-p
+           (equal (gethash "jsonrpc" response) "2.0")
+         t)
        (typep (gethash "error" response)
               '(or null hash-table))
        (typep (gethash "id" response)
@@ -78,7 +80,7 @@
                 (find key '("jsonrpc" "result" "error" "id") :test #'string=))
               (hash-table-keys response))))
 
-(defun parse-message (input)
+(defun parse-message (input &key (need-jsonrpc-p t))
   (when (< 0 (length input))
     (let ((message (handler-case (yason:parse input)
                      (error () (error 'jsonrpc-parse-error)))))
@@ -91,7 +93,7 @@
                                    :params (gethash "params" hash)
                                    :id (gethash "id" hash)))
                    (progn
-                     (unless (valid-response-p hash)
+                     (unless (valid-response-p hash :need-jsonrpc-p need-jsonrpc-p)
                        (error 'jsonrpc-invalid-response))
                      (make-response :result (gethash "result" hash)
                                     :error (gethash "error" hash)

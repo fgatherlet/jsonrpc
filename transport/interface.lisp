@@ -21,7 +21,8 @@
            #:send-message-using-transport
            #:receive-message-using-transport
            #:run-processing-loop
-           #:run-reading-loop))
+           #:run-reading-loop
+           #:transport-need-response-jsonrpc-p))
 (in-package #:jsonrpc/transport/interface)
 
 (defclass transport (event-emitter)
@@ -29,7 +30,12 @@
                      :accessor transport-message-callback)
    (connection :accessor transport-connection)
    (threads :initform '()
-            :accessor transport-threads)))
+            :accessor transport-threads)
+   (need-response-jsonrpc-p
+    :initform t
+    :initarg :need-response-jsonrpc-p
+    :accessor transport-need-response-jsonrpc-p
+    )))
 
 (defgeneric start-server (transport))
 

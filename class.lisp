@@ -75,7 +75,15 @@
   (unless (jsonrpc-transport jsonrpc)
     (error "Connection isn't established yet for ~A" jsonrpc)))
 
-(defclass client (jsonrpc) ())
+(defclass client (jsonrpc)
+  ((id-type
+    :initarg :id-type
+    :initform :string
+    :accessor client-id-type)
+   (need-response-jsonrpc-p
+    :initarg :need-response-jsonrpc-p
+    :initform t
+    :accessor client-need-response-jsonrpc-p)))
 
 (defclass server (jsonrpc)
   ((client-connections :initform '()
@@ -122,6 +130,7 @@
                             :message-callback
                             (lambda (message)
                               (dispatch client message))
+                            :need-response-jsonrpc-p (client-need-response-jsonrpc-p client)
                             initargs)))
       (setf (jsonrpc-transport client) transport)
 
@@ -154,7 +163,7 @@
 
 (defun call-async-to (from to method &optional params callback error-callback)
   (check-type params jsonrpc-params)
-  (let ((id (make-id)))
+  (let ((id (make-id :id-type (client-id-type from))))
     (set-callback-for-id to
                          id
                          (lambda (response)

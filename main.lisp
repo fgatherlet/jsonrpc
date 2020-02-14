@@ -64,8 +64,9 @@
    #:make-client))
 (in-package #:jsonrpc)
 
-(defun make-client ()
-  (make-instance 'client))
+(defun make-client (&key (id-type :string) (need-response-jsonrpc-p t))
+  (check-type id-type (member :string :number))
+  (make-instance 'client :id-type id-type :need-response-jsonrpc-p need-response-jsonrpc-p))
 
 (defun make-server ()
   (make-instance 'server))
