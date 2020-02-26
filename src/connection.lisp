@@ -74,58 +74,13 @@
   (bt:with-recursive-lock-held ((slot-value connection 'condlock))
                                (bt:condition-notify (slot-value connection 'condvar))))
 
-;; (defun connection-handle-payload (connection payload)
-;;   (cond
-;;     ((listp payload)
-;;      (chanl:send (slot-value connection 'inbox) payload)
-;;      (connection-notify-ready connection))
-;;     (t
-;;
-;;      (chanl:send (slot-value connection 'inbox) payload)
-;;      (connection-notify-ready connection)
-;;
-;;      )
-;;
-;;     ((listp payload)
-;;      (if (typep (car payload) 'request)
-;;          (progn
-;;            (chanl:send (slot-value connection 'inbox) payload)
-;;            (connection-notify-ready connection))
-;;        (dolist (response payload)
-;;          (connection-handle-payload connection response)))
-;;      (values))
-;;
-;;     ;;;; request
-;;     ((typep payload 'request)
-;;      (chanl:send (slot-value connection 'inbox) payload)
-;;      (connection-notify-ready connection)
-;;      (values))
-;;
-;;     ;;;; response
-;;     (t
-;;      (let ((id (response-id payload)))
-;;        (unless id
-;;          (warn "Unexpected response which has no id. Ignored.")
-;;          (logd "Maybe receive notification. payload:~a" payload)
-;;          (return-from connection-handle-payload))
-;;        (with-slots (response-map response-lock response-callback) connection
-;;          (bt:with-recursive-lock-held (response-lock)
-;;            (let ((callback (gethash id response-callback)))
-;;              (if callback
-;;                  (progn
-;;                    (handler-case
-;;                        (funcall callback payload)
-;;                      (error (e) (vom:error "~A in a JSON-RPC response callback: ~A" (type-of e) e)))
-;;                    (remhash id response-callback))
-;;                (setf (gethseash id response-map) payload))))))
-;;      (values))))
-
 (defun connection-enoutbox-payload (connection payload)
   (when payload
     (chanl:send (slot-value connection 'outbox) payload)
     (connection-notify-ready connection)))
 
-(defun connection-request-to-response (connection request &aux (entity (slot-value connection 'entity)))
+(defun connection-handle-request (connection request
+                                  &aux (entity (slot-value connection 'entity)))
   (flet ((proc (request)
            (let ((*connection* connection)
                  (bt:*default-special-bindings* (append `((*connection* . ,connection))
@@ -155,14 +110,11 @@
                                          (setf (gethseash id response-map) response))))))))
 
 (defun connection-read-loop (connection &key payload-reader)
-  (loop for payload = (funcall payload-reader connection) ;;(%receive-payload-tcp connection)
+  (loop for payload = (funcall payload-reader connection)
      while payload
      do
        (chanl:send (slot-value connection 'inbox) payload)
        (connection-notify-ready connection)))
-;;  (connection-handle-payload connection payload)))
-
-
 
 (defun connection-process-loop (connection &key payload-writer)
   (with-slots (inbox outbox transport) connection
@@ -176,39 +128,19 @@
          ;; handle inbox
          ((chanl:recv inbox payload)
           (cond
-            ;; ---------------------
             ;; request
             ((typep payload 'request)
-             (connection-enoutbox-payload connection (connection-request-to-response connection payload)))
-
-            ;; ---------------------
+             (connection-enoutbox-payload
+              connection
+              (connection-handle-request connection payload)))
             ;; response
             (t
-             (connection-handle-response connection payload))
-            #+nil(let ((id (response-id payload)))
-                   (if (null id)
-                       ;; ----------
-                       ;; no-id
-                       (progn (warn "Unexpected response which has no id. Ignored.")
-                              (logd "Maybe receive notification. payload:~a" payload))
-
-                     (with-slots (response-map response-lock response-callback) connection
-                       (bt:with-recursive-lock-held (response-lock)
-                                                    (let ((callback (gethash id response-callback)))
-                                                      (if callback
-                                                          (progn
-                                                            (handler-case
-                                                                (funcall callback payload)
-                                                              (error (e) (vom:error "~A in a JSON-RPC response callback: ~A" (type-of e) e)))
-                                                            (remhash id response-callback))
-                                                        (setf (gethseash id response-map) payload)))))))
-            ))
+             (connection-handle-response connection payload))))
 
          ;; ------------------------------
          ;; handle outbox
          ((chanl:recv outbox payload)
           (funcall payload-writer connection payload))
-         ;;(transport-send-payload transport connection payload))
          ))))
 
 ;;;;

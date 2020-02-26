@@ -48,7 +48,12 @@
                                 (jsonrpc-error ()
                                   ;; Nothing can be done
                                   nil))))
-                 (when payload (connection-handle-payload connection payload)))))
+                 ;; enqueue to inbox
+                 (when payload
+                   (chanl:send (slot-value connection 'inbox) payload)
+                   (connection-notify-ready connection))
+                 ;;(when payload (connection-handle-payload connection payload))
+                 )))
 
          (on :open io
              (lambda ()
@@ -100,7 +105,10 @@
         (lambda (message-json)
           (let ((payload (message-json-to-payload message-json :need-jsonrpc-field-p (slot-value entity 'need-jsonrpc-field-p))))
             (when payload
-              (connection-handle-payload connection payload)))))
+              ;;(connection-handle-payload connection payload)
+              (chanl:send (slot-value connection 'inbox) payload)
+              (connection-notify-ready connection)
+              ))))
 
     (wsd:start-connection io)
     ;;(setf (slot-value transport 'connection) connection)
