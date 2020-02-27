@@ -162,10 +162,10 @@
     (values)))
 
 (defun connection-prepare-destruction-hook (connection &aux (server (slot-value connection 'transport)))
-  (with-slots (%lock connections) server
+  (with-slots (connections-lock connections) server
     (on :close connection
         (lambda ()
-          (with-lock-held (%lock)
+          (with-lock-held (connections-lock)
             (setf connections (delete connection connections)))))
-    (with-lock-held (%lock)
+    (with-lock-held (connections-lock)
       (push connection connections))))

@@ -13,13 +13,19 @@
     :documentation "Server transport have listner thread. Client transport does not have thread usually.")
 
    (connections :initform '())
+   (connections-lock :initform (bt:make-lock "connections-lock"))
 
    (exposed :initform (make-hash-table :test 'equal))
+
    (need-jsonrpc-field-p :initarg :need-jsonrpc-field-p :initform t)
    (id-type :initarg :id-type :initform :number :type (satisfies transport-id-type-p))
    ))
 
 (defgeneric start (transport))
+
+
+
+;;;; expose
 
 (defun expose (transport method-name function)
   (setf (gethash method-name (slot-value transport 'exposed)) function))
@@ -27,6 +33,8 @@
 (defun clear-exposed (transport)
   (setf (slot-value transport 'exposed) (make-hash-table :test 'equal))
   (values))
+
+;;;;
 
 (defun transport-request-to-response (transport request
                                 &aux
@@ -71,9 +79,7 @@
 
 ;;;;
 
-(defclass server (transport)
-  ((connections :initform '())
-   (%lock :initform (bt:make-lock "connections-lock"))))
+(defclass server (transport) ())
 
 ;;;;
 
