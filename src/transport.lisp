@@ -2,16 +2,21 @@
 
 (defvar *default-timeout* 60)
 
+(defun %transport-id-type-p (x)
+  (member x '(:string :number)))
+(deftype transport-id-type ()
+  '(satisfies %transport-id-type-p))
+
 (defclass transport (event-emitter)
   ((thread
     :initform nil
     :documentation "Server transport have listner thread. Client transport does not have thread usually.")
+
    (connections :initform '())
 
    (exposed :initform (make-hash-table :test 'equal))
    (need-jsonrpc-field-p :initarg :need-jsonrpc-field-p :initform t)
-   (id-type :initarg :id-type :initform :string)
-
+   (id-type :initarg :id-type :initform :number :type (satisfies transport-id-type-p))
    ))
 
 (defgeneric start (transport))

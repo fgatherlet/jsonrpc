@@ -44,43 +44,20 @@
                                 (connection (make-instance 'connection
                                                            :io (usocket:socket-stream socket)
                                                            :transport transport
-                                                           ))
-                                )
-                           
+                                                           )))
                            (connection-prepare-destruction-hook connection)
-                           
                            (setf (slot-value connection 'threads)
                                  (list
                                   (bt:make-thread
                                    (lambda () (connection-read-loop connection :payload-reader #'payload-reader-tcp))
-                                   :name "jsonrpc/transport/tcp reader")
+                                   :name "jsonrpc/tcp-server reader")
                                   
                                   (bt:make-thread
                                    (lambda () (connection-process-loop connection :payload-writer #'payload-writer-tcp))
-                                   :name "jsonrpc/transport/tcp processer")))
-                           ;;(let ((thread
-                           ;;                ;; ------------------------------
-                           ;;                ;; handle inbox || handle outbox
-                           ;;                (bt:make-thread
-                           ;;                 (lambda () (connection-process-loop connection :payload-writer #'payload-writer-tcp))
-                           ;;                 :name "jsonrpc/transport/tcp processing"
-                           ;;                 :initial-bindings
-                           ;;                 `((*standard-output* . ,*standard-output*)
-                           ;;                   (*error-output* . ,*error-output*)))))
-                           ;;            (unwind-protect
-                           ;;                ;; ------------------------------
-                           ;;                ;; read and (enqueue request to inbox) or (dispatch response)
-                           ;;                 (connection-read-loop connection :payload-reader #'payload-reader-tcp)
-                           ;;             (finish-output (slot-value connection 'io))
-                           ;;             (usocket:socket-close socket)
-                           ;;             (bt:destroy-thread thread)
-                           ;;             (emit :close connection))))
-                           ;;       :name "jsonrpc/transport/tcp reading"))
-                           ;;
-                           ;;(push thread client-threads)
+                                   :name "jsonrpc/tcp-server processer")))
+
                            (push connection (slot-value transport 'connections)))))
-                 
-                 ;;(mapc #'bt:destroy-thread client-threads)
+
                  (mapc #'connection-destroy (slot-value transport 'connections))
                  ))))
          :name "jsonrpc/transport/tcp listener"
@@ -100,19 +77,13 @@
                                                    (*error-output* . ,*error-output*)))))
       (setf (slot-value connection 'threads)
             (list
-             ;; ------------------------------
-             ;; handle inbox || handle outbox
              (bt:make-thread
-              (lambda ()
-                (connection-process-loop connection :payload-writer #'payload-writer-tcp))
-              :name "jsonrpc/transport/tcp processing")
+              (lambda () (connection-read-loop connection :payload-reader #'payload-reader-tcp))
+              :name "jsonrpc/tcp-client reader")
              
-             ;; ------------------------------
-             ;; read and (enqueue request to inbox) or (dispatch response)
              (bt:make-thread
-              (lambda ()
-                (connection-read-loop connection :payload-reader #'payload-reader-tcp)
-                :name "jsonrpc/transport/tcp reading"))
+              (lambda () (connection-process-loop connection :payload-writer #'payload-writer-tcp))
+              :name "jsonrpc/tcp-client processor")
              ))
       
       (push connection (slot-value transport 'connections))
