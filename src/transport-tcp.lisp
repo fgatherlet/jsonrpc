@@ -43,25 +43,32 @@
                          (let* ((socket (usocket:socket-accept server-socket))
                                 (connection (make-instance 'connection
                                                            :io (usocket:socket-stream socket)
-                                                           :transport transport
-                                                           )))
+                                                           :transport transport)))
                            (connection-prepare-destruction-hook connection)
                            (setf (slot-value connection 'threads)
-                                 (list
-                                  (bt:make-thread
-                                   (lambda () (connection-read-loop connection :payload-reader #'payload-reader-tcp))
-                                   :name "jsonrpc/tcp-server reader")
-                                  
-                                  (bt:make-thread
-                                   (lambda () (connection-process-loop connection :payload-writer #'payload-writer-tcp))
-                                   :name "jsonrpc/tcp-server processer")))
-
+                                 (list (connection-reader connection :name "jsownrpc/tcp-server/reader" :payload-reader #'payload-reader-tcp)
+                                       (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'payload-writer-tcp)))
+                           ;;      (list
+                           ;;       (connection-read-loop
+                           ;;       (bt:make-thread
+                           ;;        (lambda () (connection-read-loop connection :payload-reader #'payload-reader-tcp))
+                           ;;        :name "jsonrpc/tcp-server reader")
+                           ;;       (bt:make-thread
+                           ;;        (lambda () (connection-process-loop connection :payload-writer #'payload-writer-tcp))
+                           ;;        :name "jsonrpc/tcp-server processer")))
+                           
                            (push connection (slot-value transport 'connections)))))
-
+                 
                  (mapc #'connection-destroy (slot-value transport 'connections))
                  ))))
          :name "jsonrpc/transport/tcp listener"
          )))
+
+;;             (finish-output (slot-value connection 'io))
+;;             (usocket:socket-close socket)
+;;             (bt:destroy-thread thread)
+;;             (emit :close connection))))
+
 
 (defmethod start ((transport tcp-client))
   (let ((io (usocket:socket-stream
@@ -76,16 +83,9 @@
                                                  `((*standard-output* . ,*standard-output*)
                                                    (*error-output* . ,*error-output*)))))
       (setf (slot-value connection 'threads)
-            (list
-             (bt:make-thread
-              (lambda () (connection-read-loop connection :payload-reader #'payload-reader-tcp))
-              :name "jsonrpc/tcp-client reader")
-             
-             (bt:make-thread
-              (lambda () (connection-process-loop connection :payload-writer #'payload-writer-tcp))
-              :name "jsonrpc/tcp-client processor")
-             ))
-      
+            (list (connection-reader connection :name "jsownrpc/tcp-client/reader" :payload-reader #'payload-reader-tcp)
+                  (connection-processor connection :name "jsownrpc/tcp-client/processor" :payload-writer #'payload-writer-tcp)))
+
       (push connection (slot-value transport 'connections))
       
       connection)))

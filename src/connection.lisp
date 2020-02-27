@@ -114,39 +114,47 @@
                                              (remhash id response-callback))
                                          (setf (gethseash id response-map) response))))))))
 
-(defun connection-read-loop (connection &key payload-reader)
-  (loop for payload = (funcall payload-reader connection)
-     while payload
-     do
-       (chanl:send (slot-value connection 'inbox) payload)
-       (connection-notify-ready connection)))
+(defun connection-reader (connection &key payload-reader (name "reader"))
+  (bt:make-thread
+   (lambda ()
+     (loop for payload = (funcall payload-reader connection)
+        while payload
+        do
+          (chanl:send (slot-value connection 'inbox) payload)
+          (connection-notify-ready connection)))
+   :name name
+   ))
 
-(defun connection-process-loop (connection &key payload-writer)
-  (with-slots (inbox outbox transport) connection
-    (loop
-       (when (and (chanl:recv-blocks-p inbox)
-                  (chanl:recv-blocks-p outbox))
-         (connection-wait-for-ready connection))
-
-       (chanl:select
-         ;; ------------------------------
-         ;; handle inbox
-         ((chanl:recv inbox payload)
-          (cond
-            ;; request
-            ((typep payload 'request)
-             (connection-enoutbox-payload
-              connection
-              (connection-handle-request connection payload)))
-            ;; response
-            (t
-             (connection-handle-response connection payload))))
-
-         ;; ------------------------------
-         ;; handle outbox
-         ((chanl:recv outbox payload)
-          (funcall payload-writer connection payload))
-         ))))
+(defun connection-processor (connection &key payload-writer (name "processor"))
+  (bt:make-thread
+   (lambda ()
+     (with-slots (inbox outbox transport) connection
+       (loop
+          (when (and (chanl:recv-blocks-p inbox)
+                     (chanl:recv-blocks-p outbox))
+            (connection-wait-for-ready connection))
+          
+          (chanl:select
+            ;; ------------------------------
+            ;; handle inbox
+            ((chanl:recv inbox payload)
+             (cond
+               ;; request
+               ((typep payload 'request)
+                (connection-enoutbox-payload
+                 connection
+                 (connection-handle-request connection payload)))
+               ;; response
+               (t
+                (connection-handle-response connection payload))))
+            
+            ;; ------------------------------
+            ;; handle outbox
+            ((chanl:recv outbox payload)
+             (funcall payload-writer connection payload))
+            ))))
+   :name name
+   ))
 
 ;;;;
 
