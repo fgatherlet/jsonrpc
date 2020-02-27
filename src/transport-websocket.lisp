@@ -38,7 +38,6 @@
               (connection (make-instance 'connection
                                          :io io
                                          :transport transport
-                                         :entity entity
                                          )))
 
          (on :message io
@@ -47,7 +46,7 @@
                ;; read and (enqueue request to inbox) or (dispatch response)
                (let ((payload (handler-case
                                   ;; this part is receive-payload
-                                  (message-json-to-payload input :need-jsonrpc-field-p (slot-value entity 'need-jsonrpc-field-p))
+                                  (message-json-to-payload input :need-jsonrpc-field-p (slot-value transport 'need-jsonrpc-field-p))
                                 (jsonrpc-error ()
                                   ;; Nothing can be done
                                   nil))))
@@ -62,7 +61,7 @@
              (lambda ()
                (connection-prepare-destruction-hook connection)
                ;; hook on open connection
-               (emit :open entity connection)
+               (emit :open transport connection)
                ))
 
          (on :close io
@@ -92,7 +91,7 @@
                                       (slot-value transport 'host)
                                       (slot-value transport 'port)
                                       (slot-value transport 'path))))
-         (connection (make-instance 'connection :io io :transport transport :entity entity)))
+         (connection (make-instance 'connection :io io :transport transport)))
 
     (on :open io
         (lambda ()
@@ -106,7 +105,7 @@
         ;; ------------------------------
         ;; read and (enqueue request to inbox) or (dispatch response)
         (lambda (message-json)
-          (let ((payload (message-json-to-payload message-json :need-jsonrpc-field-p (slot-value entity 'need-jsonrpc-field-p))))
+          (let ((payload (message-json-to-payload message-json :need-jsonrpc-field-p (slot-value transport 'need-jsonrpc-field-p))))
             (when payload
               ;;(connection-handle-payload connection payload)
               (chanl:send (slot-value connection 'inbox) payload)
@@ -116,7 +115,7 @@
     (wsd:start-connection io)
     ;;(setf (slot-value transport 'connection) connection)
 
-    (setf (slot-value entity 'threads)
+    (setf (slot-value connection 'threads)
           (list
            ;; ------------------------------
            ;; handle inbox || handle outbox
