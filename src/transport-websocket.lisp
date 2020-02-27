@@ -33,19 +33,18 @@
      (block nil
        ;; Return 200 OK for non-WebSocket requests
        (unless (wsd:websocket-p env) (return '(200 () ("ok"))))
-       
+
        (let* ((io (wsd:make-server env))
               (connection (make-instance 'connection
                                          :io io
                                          :transport transport
                                          )))
-         
+
          (on :message io
              (lambda (input)
                ;; ------------------------------
                ;; read and (enqueue request to inbox) or (dispatch response)
                (let ((payload (handler-case
-                                  ;; this part is receive-payload
                                   (message-json-to-payload input :need-jsonrpc-field-p (slot-value transport 'need-jsonrpc-field-p))
                                 (jsonrpc-error ()
                                   ;; Nothing can be done
@@ -56,27 +55,22 @@
                    (connection-notify-ready connection))
                  ;;(when payload (connection-handle-payload connection payload))
                  )))
-         
+
          (on :open io
              (lambda ()
                (connection-prepare-destruction-hook connection)
                ;; hook on open connection
                (emit :open transport connection)
                ))
-         
+
          (on :close io
              (lambda (&key code reason)
                (declare (ignore code reason))
                (emit :close connection)))
-         
+
          (lambda (responder)
            (declare (ignore responder))
            (let ((thread (connection-processor connection :name "jsownrpc/websocket-server/processor" :payload-writer #'payload-writer-websocket)))
-             ;;     (bt:make-thread
-             ;;      ;; ------------------------------
-             ;;      ;; handle inbox || handle outbox
-             ;;      (lambda () (connection-process-loop connection :payload-writer #'payload-writer-websocket))
-             ;;      :name "jsonrpc/transport/websocket processing")))
              (unwind-protect
                   (wsd:start-connection io)
                (bt:destroy-thread thread)))))))
@@ -118,11 +112,7 @@
 
     (setf (slot-value connection 'threads)
           (list
-           ;; ------------------------------
-           ;; handle inbox || handle outbox
            (connection-processor connection :name "jsownrpc/websocket-client/processor" :payload-writer #'payload-writer-websocket)
-           ;;(bt:make-thread (lambda () (connection-process-loop connection :payload-writer #'payload-writer-websocket))
-           ;;                :name "jsonrpc/transport/websocket processing")
            ;; KLUDGE: Requires to kill the read-thread of WebSocket client
            ;;   for calling 'close-connection'.
            ;;   Perhaps, finalization should be done in other places.

@@ -48,15 +48,6 @@
                            (setf (slot-value connection 'threads)
                                  (list (connection-reader connection :name "jsownrpc/tcp-server/reader" :payload-reader #'payload-reader-tcp)
                                        (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'payload-writer-tcp)))
-                           ;;      (list
-                           ;;       (connection-read-loop
-                           ;;       (bt:make-thread
-                           ;;        (lambda () (connection-read-loop connection :payload-reader #'payload-reader-tcp))
-                           ;;        :name "jsonrpc/tcp-server reader")
-                           ;;       (bt:make-thread
-                           ;;        (lambda () (connection-process-loop connection :payload-writer #'payload-writer-tcp))
-                           ;;        :name "jsonrpc/tcp-server processer")))
-                           
                            (push connection (slot-value transport 'connections)))))
                  
                  (mapc #'connection-destroy (slot-value transport 'connections))

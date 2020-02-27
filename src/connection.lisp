@@ -152,7 +152,8 @@
             ;; handle outbox
             ((chanl:recv outbox payload)
              (funcall payload-writer connection payload))
-            ))))
+            ))
+       ))
    :name name
    ))
 
