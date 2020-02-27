@@ -21,9 +21,13 @@
    (id-type :initarg :id-type :initform :number :type (satisfies transport-id-type-p))
    ))
 
+(defgeneric transport-close-connection (transport connection))
 (defgeneric start (transport))
 
-
+(defmethod transport-close-connection ((transport transport) (connection connection))
+  (with-slots (connections connections-lock) transport
+    (bt:with-lock-held (connections-lock)
+      (setf connections (delete connection connections)))))
 
 ;;;; expose
 

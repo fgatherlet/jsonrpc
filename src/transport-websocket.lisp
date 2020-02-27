@@ -27,6 +27,13 @@
       (setf (slot-value transport 'path) (or (quri:uri-path uri) "/"))))
   transport)
 
+(defmethod transport-close-connection ((transport websocket-transport) (connection connection))
+  (with-slots (io) connection
+    ;;(finish-output io)
+    (wsd:close-connection io))
+  (call-next-method))
+
+
 (defmethod start ((transport websocket-server))
   (clack:clackup
    (lambda (env)
@@ -58,7 +65,16 @@
 
          (on :open io
              (lambda ()
-               (connection-prepare-destruction-hook connection)
+               ;; (connection-prepare-destruction-hook connection)
+               ;;(let ((server (slot-value connection 'transport)))
+               ;;  (with-slots (connections-lock connections) server
+               ;;    (on :close connection
+               ;;        (lambda ()
+               ;;          (with-lock-held (connections-lock)
+               ;;            (setf connections (delete connection connections)))))
+               ;;    (with-lock-held (connections-lock)
+               ;;      (push connection connections))))
+
                ;; hook on open connection
                (emit :open transport connection)
                ))
@@ -70,10 +86,12 @@
 
          (lambda (responder)
            (declare (ignore responder))
-           (let ((thread (connection-processor connection :name "jsownrpc/websocket-server/processor" :payload-writer #'payload-writer-websocket)))
+           (let ((processor (connection-processor connection :name "jsownrpc/websocket-server/processor"
+                                                  :payload-writer #'payload-writer-websocket)))
              (unwind-protect
                   (wsd:start-connection io)
-               (bt:destroy-thread thread)))))))
+               (bt:destroy-thread processor)))))))
+
    :host (slot-value transport 'host)
    :port (slot-value transport 'port)
    :server :hunchentoot
@@ -112,7 +130,8 @@
 
     (setf (slot-value connection 'threads)
           (list
-           (connection-processor connection :name "jsownrpc/websocket-client/processor" :payload-writer #'payload-writer-websocket)
+           (connection-processor connection :name "jsownrpc/websocket-client/processor"
+                                 :payload-writer #'payload-writer-websocket)
            ;; KLUDGE: Requires to kill the read-thread of WebSocket client
            ;;   for calling 'close-connection'.
            ;;   Perhaps, finalization should be done in other places.

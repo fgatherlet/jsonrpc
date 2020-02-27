@@ -73,11 +73,11 @@
 (defun connection-wait-for-ready (connection)
   (with-slots (condlock condvar) connection
     (bt:with-recursive-lock-held (condlock)
-                                 (bt:condition-wait condvar condlock))))
+      (bt:condition-wait condvar condlock))))
 
 (defun connection-notify-ready (connection)
   (bt:with-recursive-lock-held ((slot-value connection 'condlock))
-                               (bt:condition-notify (slot-value connection 'condvar))))
+    (bt:condition-notify (slot-value connection 'condvar))))
 
 (defun connection-enoutbox-payload (connection payload)
   (when payload
@@ -105,14 +105,14 @@
 
       (with-slots (response-map response-lock response-callback) connection
         (bt:with-recursive-lock-held (response-lock)
-                                     (let ((callback (gethash id response-callback)))
-                                       (if callback
-                                           (progn
-                                             (handler-case
-                                                 (funcall callback response)
-                                               (error (e) (vom:error "~A in a JSON-RPC response callback: ~A" (type-of e) e)))
-                                             (remhash id response-callback))
-                                         (setf (gethseash id response-map) response))))))))
+          (let ((callback (gethash id response-callback)))
+            (if callback
+                (progn
+                  (handler-case
+                      (funcall callback response)
+                    (error (e) (vom:error "~A in a JSON-RPC response callback: ~A" (type-of e) e)))
+                  (remhash id response-callback))
+              (setf (gethseash id response-map) response))))))))
 
 (defun connection-reader (connection &key payload-reader (name "reader"))
   (bt:make-thread
@@ -129,52 +129,58 @@
   (bt:make-thread
    (lambda ()
      (with-slots (inbox outbox transport) connection
-       (loop
-          (when (and (chanl:recv-blocks-p inbox)
-                     (chanl:recv-blocks-p outbox))
-            (connection-wait-for-ready connection))
-          
-          (chanl:select
-            ;; ------------------------------
-            ;; handle inbox
-            ((chanl:recv inbox payload)
-             (cond
-               ;; request
-               ((typep payload 'request)
-                (connection-enoutbox-payload
-                 connection
-                 (connection-handle-request connection payload)))
-               ;; response
-               (t
-                (connection-handle-response connection payload))))
-            
-            ;; ------------------------------
-            ;; handle outbox
-            ((chanl:recv outbox payload)
-             (funcall payload-writer connection payload))
-            ))
-       ))
+       (unwind-protect
+            (loop
+               (when (and (chanl:recv-blocks-p inbox)
+                          (chanl:recv-blocks-p outbox))
+                 (connection-wait-for-ready connection))
+
+               (chanl:select
+                ;; ------------------------------
+                ;; handle inbox
+                ((chanl:recv inbox payload)
+                 (cond
+                   ;; request
+                   ((typep payload 'request)
+                    (connection-enoutbox-payload
+                     connection
+                     (connection-handle-request connection payload)))
+                   ;; response
+                   (t
+                    (connection-handle-response connection payload))))
+
+                ;; ------------------------------
+                ;; handle outbox
+                ((chanl:recv outbox payload)
+                 (funcall payload-writer connection payload))
+                ))
+         (connection-close connection))))
    :name name
    ))
+
+(defun connection-close (connection)
+  (with-slots (transport) connection
+    (transport-close-connection transport connection)))
+
 
 ;;;;
 
 (defun connection-set-callback-for-response (connection id callback)
   (with-slots (response-map response-callback response-lock) connection
     (bt:with-recursive-lock-held (response-lock)
-                                 (multiple-value-bind (response existsp) (gethash id response-map)
-                                   (if existsp
-                                       (progn
-                                         (funcall callback response)
-                                         (remhash id response-map))
-                                     (setf (gethash id response-callback) callback))))
+      (multiple-value-bind (response existsp) (gethash id response-map)
+        (if existsp
+            (progn
+              (funcall callback response)
+              (remhash id response-map))
+          (setf (gethash id response-callback) callback))))
     (values)))
 
-(defun connection-prepare-destruction-hook (connection &aux (server (slot-value connection 'transport)))
-  (with-slots (connections-lock connections) server
-    (on :close connection
-        (lambda ()
-          (with-lock-held (connections-lock)
-            (setf connections (delete connection connections)))))
-    (with-lock-held (connections-lock)
-      (push connection connections))))
+;;(defun connection-prepare-destruction-hook (connection &aux (server (slot-value connection 'transport)))
+;;  (with-slots (connections-lock connections) server
+;;    (on :close connection
+;;        (lambda ()
+;;          (with-lock-held (connections-lock)
+;;            (setf connections (delete connection connections)))))
+;;    (with-lock-held (connections-lock)
+;;      (push connection connections))))

@@ -24,6 +24,12 @@
       (setf (slot-value transport 'port) (quri:uri-port uri))))
   transport)
 
+(defmethod transport-close-connection ((transport tcp-transport) (connection connection))
+  (with-slots (io) connection
+    (finish-output io)
+    (usocket:socket-close io))
+  (call-next-method))
+
 (defmethod start ((transport tcp-server))
   (setf (slot-value transport 'thread)
         (bt:make-thread
@@ -44,7 +50,7 @@
                                 (connection (make-instance 'connection
                                                            :io (usocket:socket-stream socket)
                                                            :transport transport)))
-                           (connection-prepare-destruction-hook connection)
+                           ;;(connection-prepare-destruction-hook connection)
                            (setf (slot-value connection 'threads)
                                  (list (connection-reader connection :name "jsownrpc/tcp-server/reader" :payload-reader #'payload-reader-tcp)
                                        (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'payload-writer-tcp)))
