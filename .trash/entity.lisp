@@ -5,8 +5,7 @@
 ;;;; entity
 
 (defclass entity (event-emitter)
-  ((threads :initform '())
-   (need-jsonrpc-field-p :initarg :need-jsonrpc-field-p :initform t)
+  ((need-jsonrpc-field-p :initarg :need-jsonrpc-field-p :initform t)
    (exposed :initform (make-hash-table :test 'equal))
 
    (id-type :initarg :id-type :initform :string)
@@ -72,8 +71,8 @@
 (defclass client (entity) ())
 
 (defun client-disconnect (client)
-  (with-slots (threads) client
-    (mapc #'bt:destroy-thread threads)
-    (setf threads '()))
+  (with-slots (thread) client
+    (bt:destroy-thread thread)
+    (setf thread nil))
   (emit :close client)
   (values))

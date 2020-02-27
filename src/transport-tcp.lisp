@@ -2,13 +2,16 @@
 
 (define-condition eof (error) ())
 
-(defclass tcp-transport (transport)
+(defclass tcp-transport ()
   ((host :initarg :host
          :initform "127.0.0.1")
    (port :initarg :port
          :initform (random-port))
    (securep :initarg :securep
             :initform nil)))
+
+(defclass tcp-server (tcp-transport server) ())
+(defclass tcp-client (tcp-transport client) ())
 
 (defmethod initialize-instance :after ((transport tcp-transport) &rest initargs &key url &allow-other-keys)
   (declare (ignore initargs))
@@ -21,85 +24,102 @@
       (setf (slot-value transport 'port) (quri:uri-port uri))))
   transport)
 
-(defmethod start ((entity server) (transport tcp-transport))
-  (usocket:with-socket-listener (server-socket (slot-value transport 'host)
-                                               (slot-value transport 'port)
-                                               :reuse-address t
-                                               :element-type '(unsigned-byte 8))
-    (let ((client-threads '())
-          (bt:*default-special-bindings* (append bt:*default-special-bindings*
-                                                 `((*standard-output* . ,*standard-output*)
-                                                   (*error-output* . ,*error-output*)))))
-      (unwind-protect
-           (loop
-              (usocket:wait-for-input (list server-socket) :timeout 10)
-              (when (member (usocket:socket-state server-socket) '(:read :read-write))
-                (let* ((socket (usocket:socket-accept server-socket))
-                       (connection (make-instance 'connection
-                                                  :io (usocket:socket-stream socket)
-                                                  :transport transport
-                                                  :entity entity
-                                                  ))
-                       thread)
-
-                  (connection-prepare-destruction-hook connection)
-                  ;; hook on open connection
-                  (emit :open entity connection)
-
-                  (setq thread
-                        (bt:make-thread
-                         (lambda ()
-                           (let ((thread
-                                  ;; ------------------------------
-                                  ;; handle inbox || handle outbox
+(defmethod start ((transport tcp-server))
+  (setf (slot-value transport 'thread)
+        (bt:make-thread
+         (lambda ()
+           (usocket:with-socket-listener (server-socket (slot-value transport 'host)
+                                                        (slot-value transport 'port)
+                                                        :reuse-address t
+                                                        :element-type '(unsigned-byte 8))
+             (let ((bt:*default-special-bindings* (append bt:*default-special-bindings*
+                                                          `((*standard-output* . ,*standard-output*)
+                                                            (*error-output* . ,*error-output*)))))
+               
+               (unwind-protect
+                    (loop
+                       (usocket:wait-for-input (list server-socket) :timeout 10)
+                       (when (member (usocket:socket-state server-socket) '(:read :read-write))
+                         (let* ((socket (usocket:socket-accept server-socket))
+                                (connection (make-instance 'connection
+                                                           :io (usocket:socket-stream socket)
+                                                           :transport transport
+                                                           ))
+                                )
+                           
+                           (connection-prepare-destruction-hook connection)
+                           
+                           (setf (slot-value connection 'threads)
+                                 (list
+                                  (bt:make-thread
+                                   (lambda () (connection-read-loop connection :payload-reader #'payload-reader-tcp))
+                                   :name "jsonrpc/transport/tcp reader")
+                                  
                                   (bt:make-thread
                                    (lambda () (connection-process-loop connection :payload-writer #'payload-writer-tcp))
-                                   :name "jsonrpc/transport/tcp processing"
-                                   :initial-bindings
-                                   `((*standard-output* . ,*standard-output*)
-                                     (*error-output* . ,*error-output*)))))
-                             (unwind-protect
-                                  ;; ------------------------------
-                                  ;; read and (enqueue request to inbox) or (dispatch response)
-                                  (connection-read-loop connection :payload-reader #'payload-reader-tcp)
-                               (finish-output (slot-value connection 'io))
-                               (usocket:socket-close socket)
-                               (bt:destroy-thread thread)
-                               (emit :close connection))))
-                         :name "jsonrpc/transport/tcp reading"))
+                                   :name "jsonrpc/transport/tcp processer")))
+                           ;;(let ((thread
+                           ;;                ;; ------------------------------
+                           ;;                ;; handle inbox || handle outbox
+                           ;;                (bt:make-thread
+                           ;;                 (lambda () (connection-process-loop connection :payload-writer #'payload-writer-tcp))
+                           ;;                 :name "jsonrpc/transport/tcp processing"
+                           ;;                 :initial-bindings
+                           ;;                 `((*standard-output* . ,*standard-output*)
+                           ;;                   (*error-output* . ,*error-output*)))))
+                           ;;            (unwind-protect
+                           ;;                ;; ------------------------------
+                           ;;                ;; read and (enqueue request to inbox) or (dispatch response)
+                           ;;                 (connection-read-loop connection :payload-reader #'payload-reader-tcp)
+                           ;;             (finish-output (slot-value connection 'io))
+                           ;;             (usocket:socket-close socket)
+                           ;;             (bt:destroy-thread thread)
+                           ;;             (emit :close connection))))
+                           ;;       :name "jsonrpc/transport/tcp reading"))
+                           ;;
+                           ;;(push thread client-threads)
+                           (push connection (slot-value transport 'connections)))))
+                 
+                 ;;(mapc #'bt:destroy-thread client-threads)
+                 (mapc #'connection-destroy (slot-value transport 'connections))
+                 ))))
+         :name "jsonrpc/transport/tcp listener"
+         )))
 
-                  (push thread client-threads))))
-
-        (mapc #'bt:destroy-thread client-threads)))))
-
-(defmethod start ((entity client) (transport tcp-transport))
+(defmethod start ((transport tcp-client))
   (let ((io (usocket:socket-stream
-                 (usocket:socket-connect (slot-value transport 'host)
-                                         (slot-value transport 'port)
-                                         :element-type '(unsigned-byte 8)))))
+             (usocket:socket-connect (slot-value transport 'host)
+                                     (slot-value transport 'port)
+                                     :element-type '(unsigned-byte 8)))))
     (when (slot-value transport 'securep)
       (setf io (cl+ssl:make-ssl-client-stream io :hostname (slot-value transport 'host))))
-
-    (let ((connection (make-instance 'connection :io io :entity entity :transport transport))
+    
+    (let ((connection (make-instance 'connection :io io :transport transport))
           (bt:*default-special-bindings* (append bt:*default-special-bindings*
                                                  `((*standard-output* . ,*standard-output*)
                                                    (*error-output* . ,*error-output*)))))
-      (setf (slot-value entity 'threads)
+      (setf (slot-value connection 'threads)
             (list
-
              ;; ------------------------------
              ;; handle inbox || handle outbox
-             (bt:make-thread (lambda ()
-                               (connection-process-loop connection :payload-writer #'payload-writer-tcp))
-                             :name "jsonrpc/transport/tcp processing")
-
+             (bt:make-thread
+              (lambda ()
+                (connection-process-loop connection :payload-writer #'payload-writer-tcp))
+              :name "jsonrpc/transport/tcp processing")
+             
              ;; ------------------------------
              ;; read and (enqueue request to inbox) or (dispatch response)
-             (bt:make-thread (lambda ()
-                               (connection-read-loop connection :payload-reader #'payload-reader-tcp)
-                             :name "jsonrpc/transport/tcp reading"))
+             (bt:make-thread
+              (lambda ()
+                (connection-read-loop connection :payload-reader #'payload-reader-tcp)
+                :name "jsonrpc/transport/tcp reading"))
              ))
+      
+      (push connection (slot-value transport 'connections))
+      
       connection)))
+
+;;;; internal
 
 (defun payload-writer-tcp (connection payload)
   (let* ((json (jsown:to-json payload))
@@ -116,9 +136,7 @@
     (write-sequence body io)
     (force-output io)))
 
-;;;; internal
-
-(defun payload-reader-tcp (connection &aux (entity (slot-value connection 'entity)))
+(defun payload-reader-tcp (connection &aux (transport (slot-value connection 'transport)))
   (handler-case
       (let* ((io (slot-value connection 'io))
              (headers (%read-headers io))
@@ -128,7 +146,7 @@
             (read-sequence body io)
             ;; TODO: error handlin
             ;;;; jsown cause bug. body to be ["RESPONSE-RESULT", "PAYLOAD"]
-            (message-json-to-payload (utf-8-bytes-to-string body :need-jsonrpc-field-p (slot-value entity 'need-jsonrpc-field-p))))))
+            (message-json-to-payload (utf-8-bytes-to-string body) :need-jsonrpc-field-p (slot-value transport 'need-jsonrpc-field-p)))))
     (eof () nil)))
 
 (defun %read-headers (io)

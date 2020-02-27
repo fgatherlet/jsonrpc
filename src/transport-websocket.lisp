@@ -1,6 +1,6 @@
 (in-package #:jsonrpc)
 
-(defclass websocket-transport (transport)
+(defclass websocket-transport ()
   ((host :initarg :host
          :initform "127.0.0.1")
    (port :initarg :port
@@ -11,6 +11,9 @@
             :initform nil)
    (debug :initarg :debug
           :initform t)))
+
+(defclass websocket-server (websocket-transport server) ())
+(defclass websocket-client (websocket-transport client) ())
 
 (defmethod initialize-instance :after ((transport websocket-transport) &rest initargs &key url &allow-other-keys)
   (declare (ignore initargs))
@@ -24,7 +27,7 @@
       (setf (slot-value transport 'path) (or (quri:uri-path uri) "/"))))
   transport)
 
-(defmethod start ((entity server) (transport websocket-transport))
+(defmethod start ((transport websocket-server))
   (clack:clackup
    (lambda (env)
      (block nil
@@ -81,9 +84,9 @@
    :port (slot-value transport 'port)
    :server :hunchentoot
    :debug (slot-value transport 'debug)
-   :use-thread nil))
+   :use-thread t))
 
-(defmethod start ((entity client) (transport websocket-transport))
+(defmethod start ((transport websocket-client))
   (let* ((io (wsd:make-client (format nil "~A://~A:~A~A"
                                       (if (slot-value transport 'securep) "wss" "ws")
                                       (slot-value transport 'host)

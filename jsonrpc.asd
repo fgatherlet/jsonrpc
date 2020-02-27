@@ -31,11 +31,11 @@
                  (:file "payload")
                  (:file "connection")
 
-                 (:file "entity")
+                 ;;(:file "entity")
 
-                 (:file "transport" :depends-on (:connection :entity))
-                 (:file "transport-tcp")
-                 (:file "transport-websocket")
+                 (:file "transport" :depends-on (:connection))
+                 (:file "transport-tcp" :depends-on (:transport))
+                 (:file "transport-websocket" :depends-on (:transport))
                  ;;(:file "transport-stdio")
                  ;;(:module
                  ;; "transport"

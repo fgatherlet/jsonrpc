@@ -5,8 +5,9 @@
 (defclass connection (event-emitter)
   ((io :initarg :io)
 
-   (entity :initarg :entity)
    (transport :initarg :transport)
+
+   (threads :initform '())
 
    (inbox :initform (make-instance 'chanl:unbounded-channel))
    (outbox :initform (make-instance 'chanl:unbounded-channel))
@@ -20,6 +21,10 @@
    (condlock :initform (bt:make-recursive-lock))
    ))
 
+(defun connection-destroy (connection)
+  (with-slots (thread) connection
+    (when thread (bt:destroy-thread thread))))
+
 ;;;; call api
 
 (defun call-async (connection method params &key callback &aux id)
@@ -28,7 +33,7 @@
   (check-type connection connection)
 
   (when callback
-    (setq id (make-id :id-type (slot-value (slot-value connection 'entity) 'id-type)))
+    (setq id (make-id :id-type (slot-value (slot-value connection 'transport) 'id-type)))
     (connection-set-callback-for-response connection id callback))
 
   (connection-enoutbox-payload connection (make-request :id id :method method :params params))
@@ -80,12 +85,12 @@
     (connection-notify-ready connection)))
 
 (defun connection-handle-request (connection request
-                                  &aux (entity (slot-value connection 'entity)))
+                                  &aux (transport (slot-value connection 'transport)))
   (flet ((proc (request)
            (let ((*connection* connection)
                  (bt:*default-special-bindings* (append `((*connection* . ,connection))
                                                         bt:*default-special-bindings*)))
-             (entity-request-to-response entity request))))
+             (transport-request-to-response transport request))))
     (if (listp request)
         (mapcar #'proc request)
       (proc request))))
@@ -156,7 +161,7 @@
                                      (setf (gethash id response-callback) callback))))
     (values)))
 
-(defun connection-prepare-destruction-hook (connection &aux (server (slot-value connection 'entity)))
+(defun connection-prepare-destruction-hook (connection &aux (server (slot-value connection 'transport)))
   (with-slots (%lock connections) server
     (on :close connection
         (lambda ()

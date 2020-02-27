@@ -64,9 +64,10 @@
    #:connection
 
    ;;; entity
-   #:entity
+   ;;#:entity
+
    #:client
-   #:client-disconnect
+   ;;#:client-disconnect
    #:server
 
    #:call-async
@@ -81,7 +82,11 @@
    ;;; transport
    #:transport
    #:tcp-transport
+   #:tcp-server
+   #:tcp-client
    #:websocket-transport
+   #:websocket-server
+   #:websocket-client
    ;;#:stdio-transport cannot understand the neccesity.
 
    #:start
