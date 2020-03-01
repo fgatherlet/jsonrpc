@@ -127,7 +127,7 @@
                (connection-notify-ready connection))
 
        ;; finalize connection
-       (connection-close connection)
+       (connection-finalize connection)
        ;;(when (bt:thread-alive-p (slot-value connection 'processor))
        ;;  (bt:destroy-thread processor))
        ;;(setf (slot-value connection 'processor) nil
@@ -136,9 +136,9 @@
    :name name
    ))
 
-(defun connection-close (connection)
+(defun connection-finalize (connection)
   (with-slots (transport) connection
-    (transport-close-connection transport connection)))
+    (transport-finalize-connection transport connection)))
 
 
 (defun connection-processor (connection &key payload-writer (name "processor"))
@@ -170,7 +170,6 @@
                 ((chanl:recv outbox payload)
                  (funcall payload-writer connection payload))
                 ))
-         ;;(connection-close connection)
          )))
    :name name
    ))

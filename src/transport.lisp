@@ -18,12 +18,7 @@
    ))
 
 (defgeneric start (transport))
-
-(defgeneric transport-close-connection (transport connection))
-;; (defmethod transport-close-connection ((transport transport) (connection connection))
-;;   (with-slots (connections connections-lock) transport
-;;     (bt:with-lock-held (connections-lock)
-;;       (setf connections (delete connection connections)))))
+(defgeneric transport-finalize-connection (transport connection))
 
 ;;;; expose
 

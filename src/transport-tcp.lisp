@@ -25,7 +25,7 @@
               port (quri:uri-port uri))))
     transport))
 
-(defmethod transport-close-connection ((transport tcp-transport) (connection connection))
+(defmethod transport-finalize-connection ((transport tcp-transport) (connection connection))
   "Normally called on finalizer of reader thread."
   (with-slots (reader processor io) connection
     (when (bt:thread-alive-p processor)

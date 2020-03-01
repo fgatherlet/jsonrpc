@@ -27,7 +27,7 @@
       (setf (slot-value transport 'path) (or (quri:uri-path uri) "/"))))
   transport)
 
-(defmethod transport-close-connection ((transport websocket-transport) (connection connection))
+(defmethod transport-finalize-connection ((transport websocket-transport) (connection connection))
   (with-slots (reader processor io) connection
     (when (bt:thread-alive-p processor)
       (bt:destroy-thread processor))
@@ -111,7 +111,7 @@
             (on :close io
                 (lambda (&key code reason)
                   (declare (ignore code reason))
-                  (connection-close connection)))
+                  (connection-finalize connection)))
             ;;(emit :close connection)))
 
             (lambda (responder)
