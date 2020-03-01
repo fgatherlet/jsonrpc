@@ -26,13 +26,34 @@
     transport))
 
 (defmethod transport-close-connection ((transport tcp-transport) (connection connection))
-  (with-slots (io) connection
-    (finish-output io)
-    (usocket:socket-close io))
-  (call-next-method))
+  "Normally called on finalizer of reader thread."
+  (with-slots (reader processor io) connection
+    (when (bt:thread-alive-p processor)
+      (bt:destroy-thread processor))
+    (setf reader nil
+          processor nil)
+    (close io)
+    ))
+
+(defmethod start ((transport tcp-client))
+  (with-slots (host port securep) transport
+    (let ((io (usocket:socket-stream
+               (usocket:socket-connect host port :element-type '(unsigned-byte 8)))))
+      (when securep
+        (setf io (cl+ssl:make-ssl-client-stream io :hostname host)))
+
+      (let ((connection (make-instance 'connection :io io :transport transport))
+            (bt:*default-special-bindings* (append bt:*default-special-bindings*
+                                                   `((*standard-output* . ,*standard-output*)
+                                                     (*error-output* . ,*error-output*)))))
+        (with-slots (reader processor) connection
+          (setf reader (connection-reader connection :name "jsownrpc/tcp-client/reader" :payload-reader #'%payload-reader-tcp)
+                processor (connection-processor connection :name "jsownrpc/tcp-client/processor" :payload-writer #'%payload-writer-tcp)))
+
+        connection))))
 
 (defmethod start ((transport tcp-server))
-  (with-slots (listener connections host port) transport
+  (with-slots (listener host port) transport
     (when listener (error "already listeneing"))
     (setf listener
           (bt:make-thread
@@ -53,31 +74,17 @@
                              (with-slots (io reader processor) connection
                                (setf reader (connection-reader connection :name "jsownrpc/tcp-server/reader" :payload-reader #'%payload-reader-tcp)
                                      processor (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'%payload-writer-tcp))
-                               (push connection connections)))))
 
-                   (mapc #'connection-destroy connections)
+                               ;; delegate transport to manage connection
+                               (emit :open transport connection)
+
+                               ))))
+
+                   ;; finalize listener
+                   (emit :end-of-listner transport)
                    ))))
            :name "jsonrpc/transport/tcp listener"
            ))))
-
-(defmethod start ((transport tcp-client))
-  (with-slots (connections host port securep) transport
-    (let ((io (usocket:socket-stream
-               (usocket:socket-connect host port :element-type '(unsigned-byte 8)))))
-      (when securep
-        (setf io (cl+ssl:make-ssl-client-stream io :hostname host)))
-
-      (let ((connection (make-instance 'connection :io io :transport transport))
-            (bt:*default-special-bindings* (append bt:*default-special-bindings*
-                                                   `((*standard-output* . ,*standard-output*)
-                                                     (*error-output* . ,*error-output*)))))
-        (with-slots (reader processor) connection
-          (setf reader (connection-reader connection :name "jsownrpc/tcp-client/reader" :payload-reader #'%payload-reader-tcp)
-                processor (connection-processor connection :name "jsownrpc/tcp-client/processor" :payload-writer #'%payload-writer-tcp)))
-
-        (push connection connections)
-
-        connection))))
 
 ;;;; internal
 

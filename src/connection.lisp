@@ -125,13 +125,21 @@
              do
                (chanl:send (slot-value connection 'inbox) payload)
                (connection-notify-ready connection))
-       (when (bt:thread-alive-p (slot-value connection 'processor))
-         (bt:destroy-thread processor))
-       (setf (slot-value connection 'processor) nil
-             (slot-value connection 'reader) nil)
+
+       ;; finalize connection
+       (connection-close connection)
+       ;;(when (bt:thread-alive-p (slot-value connection 'processor))
+       ;;  (bt:destroy-thread processor))
+       ;;(setf (slot-value connection 'processor) nil
+       ;;      (slot-value connection 'reader) nil)
        ))
    :name name
    ))
+
+(defun connection-close (connection)
+  (with-slots (transport) connection
+    (transport-close-connection transport connection)))
+
 
 (defun connection-processor (connection &key payload-writer (name "processor"))
   (bt:make-thread
@@ -162,13 +170,10 @@
                 ((chanl:recv outbox payload)
                  (funcall payload-writer connection payload))
                 ))
-         (connection-close connection))))
+         ;;(connection-close connection)
+         )))
    :name name
    ))
-
-(defun connection-close (connection)
-  (with-slots (transport) connection
-    (transport-close-connection transport connection)))
 
 
 ;;;;
@@ -183,12 +188,3 @@
               (remhash id response-map))
           (setf (gethash id response-callback) callback))))
     (values)))
-
-;;(defun connection-prepare-destruction-hook (connection &aux (server (slot-value connection 'transport)))
-;;  (with-slots (connections-lock connections) server
-;;    (on :close connection
-;;        (lambda ()
-;;          (with-lock-held (connections-lock)
-;;            (setf connections (delete connection connections)))))
-;;    (with-lock-held (connections-lock)
-;;      (push connection connections))))

@@ -12,8 +12,8 @@
    (debug :initarg :debug
           :initform t)))
 
-(defclass websocket-server (websocket-transport server) ())
 (defclass websocket-client (websocket-transport client) ())
+(defclass websocket-server (websocket-transport server) ())
 
 (defmethod initialize-instance :after ((transport websocket-transport) &rest initargs &key url &allow-other-keys)
   (declare (ignore initargs))
@@ -28,72 +28,15 @@
   transport)
 
 (defmethod transport-close-connection ((transport websocket-transport) (connection connection))
-  (with-slots (io) connection
-    ;;(finish-output io)
-    (wsd:close-connection io))
-  (call-next-method))
+  (with-slots (reader processor io) connection
+    (when (bt:thread-alive-p processor)
+      (bt:destroy-thread processor))
+    (setq reader nil
+          processor nil)
+    ;;(when (member (wsd:ready-state io) '(:open :opening))
+    ;;(wsd:close-connection io))
+    ))
 
-(defmethod start ((transport websocket-server))
-  (with-slots (listener) transport
-    (when listener (error "already listening."))
-
-    (setf
-     listener
-     (clack:clackup
-      (lambda (env)
-        (block nil
-          ;; Return 200 OK for non-WebSocket requests
-          (unless (wsd:websocket-p env) (return '(200 () ("ok"))))
-          
-          (let* ((io (wsd:make-server env))
-                 (connection (make-instance 'connection
-                                            :io io
-                                            :transport transport
-                                            )))
-            
-            (on :message io
-                (lambda (input)
-                  ;; ------------------------------
-                  ;; read and (enqueue request to inbox) or (dispatch response)
-                  (let ((payload (handler-case
-                                     (message-json-to-payload input :need-jsonrpc-field-p (slot-value transport 'need-jsonrpc-field-p))
-                                   (jsonrpc-error ()
-                                     ;; Nothing can be done
-                                     nil))))
-                    ;; enqueue to inbox
-                    (when payload
-                      (chanl:send (slot-value connection 'inbox) payload)
-                      (connection-notify-ready connection))
-                    )))
-            
-            ;; (on :open io (lambda () (emit :open transport connection)))
-            
-            (on :close io
-                (lambda (&key code reason)
-                  (declare (ignore code reason))
-                  (connection-close connection)))
-            ;;(emit :close connection)))
-            
-            (lambda (responder)
-              (declare (ignore responder))
-              (with-slots (processor reader) connection
-                (setf processor (connection-processor connection :name "jsownrpc/websocket-server/processor" :payload-writer #'payload-writer-websocket))
-                (setf reader (bt:current-thread))
-                (unwind-protect
-                     ;; main (reader) thread
-                     (wsd:start-connection io)
-                  
-                  ;; finalizer
-                  (wsd:close-connection io)
-                  (when (bt:thread-alive-p processor) (bt:destroy-thread processor))
-                  (setf processor nil reader nil)
-                  ))))))
-      
-      :host (slot-value transport 'host)
-      :port (slot-value transport 'port)
-      :server :hunchentoot
-      :debug (slot-value transport 'debug)
-      :use-thread t))))
 
 (defmethod start ((transport websocket-client))
   (let* ((io (wsd:make-client (format nil "~A://~A:~A~A"
@@ -107,9 +50,10 @@
         (lambda (&key code reason)
           (declare (ignore code reason))
           (with-slots (processor) connection
-            ;; finalizer
-            (when (bt:thread-alive-p processor) (bt:destroy-thread processor))
-            (setf (slot-value connection 'processor) nil))))
+            (close-connection connection))))
+    ;;;; finalizer
+    ;;(when (bt:thread-alive-p processor) (bt:destroy-thread processor))
+    ;;(setf (slot-value connection 'processor) nil))))
 
     (on :message io
         ;; ------------------------------
@@ -128,6 +72,69 @@
     (wsd:start-connection io)
 
     connection))
+
+(defmethod start ((transport websocket-server))
+  (with-slots (listener) transport
+    (when listener (error "already listening."))
+
+    (setf
+     listener
+     (clack:clackup
+      (lambda (env)
+        (block nil
+          ;; Return 200 OK for non-WebSocket requests
+          (unless (wsd:websocket-p env) (return '(200 () ("ok"))))
+
+          (let* ((io (wsd:make-server env))
+                 (connection (make-instance 'connection
+                                            :io io
+                                            :transport transport
+                                            )))
+
+            (on :message io
+                (lambda (input)
+                  ;; ------------------------------
+                  ;; read and (enqueue request to inbox) or (dispatch response)
+                  (let ((payload (handler-case
+                                     (message-json-to-payload input :need-jsonrpc-field-p (slot-value transport 'need-jsonrpc-field-p))
+                                   (jsonrpc-error ()
+                                     ;; Nothing can be done
+                                     nil))))
+                    ;; enqueue to inbox
+                    (when payload
+                      (chanl:send (slot-value connection 'inbox) payload)
+                      (connection-notify-ready connection))
+                    )))
+
+            ;; (on :open io (lambda () (emit :open transport connection)))
+
+            (on :close io
+                (lambda (&key code reason)
+                  (declare (ignore code reason))
+                  (connection-close connection)))
+            ;;(emit :close connection)))
+
+            (lambda (responder)
+              (declare (ignore responder))
+              (with-slots (processor reader) connection
+                (setf processor (connection-processor connection :name "jsownrpc/websocket-server/processor" :payload-writer #'payload-writer-websocket))
+                (setf reader (bt:current-thread))
+                (unwind-protect
+                     ;; main (reader) thread
+                     (wsd:start-connection io)
+
+                  ;; finalizer
+                  (wsd:close-connection io)
+                  (when (bt:thread-alive-p processor) (bt:destroy-thread processor))
+                  (setf processor nil reader nil)
+                  ))))))
+
+      :host (slot-value transport 'host)
+      :port (slot-value transport 'port)
+      :server :hunchentoot
+      :debug (slot-value transport 'debug)
+      :use-thread t))))
+
 
 (defun payload-writer-websocket (connection payload)
   (let ((json (jsown:to-json payload))

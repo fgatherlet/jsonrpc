@@ -8,8 +8,8 @@
   '(satisfies %transport-id-type-p))
 
 (defclass transport (event-emitter)
-  ((connections :initform '())
-   (connections-lock :initform (bt:make-lock "connections-lock"))
+  (;;(connections :initform '())
+   ;;(connections-lock :initform (bt:make-lock "connections-lock"))
 
    (exposed :initform (make-hash-table :test 'equal))
 
@@ -20,10 +20,10 @@
 (defgeneric start (transport))
 
 (defgeneric transport-close-connection (transport connection))
-(defmethod transport-close-connection ((transport transport) (connection connection))
-  (with-slots (connections connections-lock) transport
-    (bt:with-lock-held (connections-lock)
-      (setf connections (delete connection connections)))))
+;; (defmethod transport-close-connection ((transport transport) (connection connection))
+;;   (with-slots (connections connections-lock) transport
+;;     (bt:with-lock-held (connections-lock)
+;;       (setf connections (delete connection connections)))))
 
 ;;;; expose
 
@@ -79,18 +79,14 @@
 
 ;;;;
 
+(defclass client (transport) ())
+
+;;;;
+
 (defclass server (transport)
   ((listener
     :initform nil
     :documentation "Server transport have listner thread. Client transport does not have thread usually.")))
 
-;;;;
 
-(defclass client (transport) ())
 
-;;(defun client-disconnect (client)
-;;  (with-slots (thread) client
-;;    (bt:destroy-thread thread)
-;;    (setf thread nil))
-;;  (emit :close client)
-;;  (values))
