@@ -7,7 +7,9 @@
 
    (transport :initarg :transport)
 
-   (threads :initform '())
+   ;;(threads :initform '())
+   (processor :initform nil)
+   (reader :initform nil)
 
    (inbox :initform (make-instance 'chanl:unbounded-channel))
    (outbox :initform (make-instance 'chanl:unbounded-channel))
@@ -117,11 +119,17 @@
 (defun connection-reader (connection &key payload-reader (name "reader"))
   (bt:make-thread
    (lambda ()
-     (loop for payload = (funcall payload-reader connection)
-        while payload
-        do
-          (chanl:send (slot-value connection 'inbox) payload)
-          (connection-notify-ready connection)))
+     (unwind-protect
+          (loop for payload = (funcall payload-reader connection)
+             while payload
+             do
+               (chanl:send (slot-value connection 'inbox) payload)
+               (connection-notify-ready connection))
+       (when (bt:thread-alive-p (slot-value connection 'processor))
+         (bt:destroy-thread processor))
+       (setf (slot-value connection 'processor) nil
+             (slot-value connection 'reader) nil)
+       ))
    :name name
    ))
 

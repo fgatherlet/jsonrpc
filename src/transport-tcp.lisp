@@ -21,6 +21,7 @@
         (error "Only http or https are supported for tcp-transport (specified ~S)" (quri:uri-scheme uri)))
       (setf (slot-value transport 'securep) (equalp (quri:uri-scheme uri) "https"))
       (setf (slot-value transport 'host) (quri:uri-host uri))
+
       (setf (slot-value transport 'port) (quri:uri-port uri))))
   transport)
 
@@ -31,61 +32,52 @@
   (call-next-method))
 
 (defmethod start ((transport tcp-server))
-  (setf (slot-value transport 'thread)
-        (bt:make-thread
-         (lambda ()
-           (usocket:with-socket-listener (server-socket (slot-value transport 'host)
-                                                        (slot-value transport 'port)
-                                                        :reuse-address t
-                                                        :element-type '(unsigned-byte 8))
-             (let ((bt:*default-special-bindings* (append bt:*default-special-bindings*
-                                                          `((*standard-output* . ,*standard-output*)
-                                                            (*error-output* . ,*error-output*)))))
-               
-               (unwind-protect
-                    (loop
-                       (usocket:wait-for-input (list server-socket) :timeout 10)
-                       (when (member (usocket:socket-state server-socket) '(:read :read-write))
-                         (let* ((socket (usocket:socket-accept server-socket))
-                                (connection (make-instance 'connection
-                                                           :io (usocket:socket-stream socket)
-                                                           :transport transport)))
-                           ;;(connection-prepare-destruction-hook connection)
-                           (setf (slot-value connection 'threads)
-                                 (list (connection-reader connection :name "jsownrpc/tcp-server/reader" :payload-reader #'payload-reader-tcp)
-                                       (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'payload-writer-tcp)))
-                           (push connection (slot-value transport 'connections)))))
+  (with-slots (listener connections host port) transport
+    (when listener (error "already listeneing"))
+    (setf listener
+          (bt:make-thread
+           (lambda ()
+             (usocket:with-socket-listener (server-socket host port :reuse-address t :element-type '(unsigned-byte 8))
+               (let ((bt:*default-special-bindings* (append bt:*default-special-bindings*
+                                                            `((*standard-output* . ,*standard-output*)
+                                                              (*error-output* . ,*error-output*)))))
                  
-                 (mapc #'connection-destroy (slot-value transport 'connections))
+                 (unwind-protect
+                      (loop
+                         (usocket:wait-for-input (list server-socket) :timeout 10)
+                         (when (member (usocket:socket-state server-socket) '(:read :read-write))
+                           (let* ((socket (usocket:socket-accept server-socket))
+                                  (connection (make-instance 'connection
+                                                             :io (usocket:socket-stream socket)
+                                                             :transport transport)))
+                             (with-slots (io reader processor) connection
+                               (setf reader (connection-reader connection :name "jsownrpc/tcp-server/reader" :payload-reader #'payload-reader-tcp)
+                                     processor (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'payload-writer-tcp))
+                               (push connection connections)))))
+                 
+                 (mapc #'connection-destroy connections)
                  ))))
          :name "jsonrpc/transport/tcp listener"
-         )))
-
-;;             (finish-output (slot-value connection 'io))
-;;             (usocket:socket-close socket)
-;;             (bt:destroy-thread thread)
-;;             (emit :close connection))))
-
+         ))))
 
 (defmethod start ((transport tcp-client))
-  (let ((io (usocket:socket-stream
-             (usocket:socket-connect (slot-value transport 'host)
-                                     (slot-value transport 'port)
-                                     :element-type '(unsigned-byte 8)))))
-    (when (slot-value transport 'securep)
-      (setf io (cl+ssl:make-ssl-client-stream io :hostname (slot-value transport 'host))))
-    
-    (let ((connection (make-instance 'connection :io io :transport transport))
-          (bt:*default-special-bindings* (append bt:*default-special-bindings*
-                                                 `((*standard-output* . ,*standard-output*)
-                                                   (*error-output* . ,*error-output*)))))
-      (setf (slot-value connection 'threads)
-            (list (connection-reader connection :name "jsownrpc/tcp-client/reader" :payload-reader #'payload-reader-tcp)
-                  (connection-processor connection :name "jsownrpc/tcp-client/processor" :payload-writer #'payload-writer-tcp)))
-
-      (push connection (slot-value transport 'connections))
+  (with-slots (connections host port securep) transport
+    (let ((io (usocket:socket-stream
+               (usocket:socket-connect host port :element-type '(unsigned-byte 8)))))
+      (when securep
+        (setf io (cl+ssl:make-ssl-client-stream io :hostname host)))
       
-      connection)))
+      (let ((connection (make-instance 'connection :io io :transport transport))
+            (bt:*default-special-bindings* (append bt:*default-special-bindings*
+                                                   `((*standard-output* . ,*standard-output*)
+                                                     (*error-output* . ,*error-output*)))))
+        (with-slots (reader processor) connection
+          (setf reader (connection-reader connection :name "jsownrpc/tcp-client/reader" :payload-reader #'payload-reader-tcp)
+                processor (connection-processor connection :name "jsownrpc/tcp-client/processor" :payload-writer #'payload-writer-tcp)))
+        
+        (push connection connections)
+        
+        connection))))
 
 ;;;; internal
 
