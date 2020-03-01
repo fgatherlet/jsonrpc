@@ -7,17 +7,15 @@
 (deftype transport-id-type ()
   '(satisfies %transport-id-type-p))
 
-(defclass transport (event-emitter)
-  (;;(connections :initform '())
-   ;;(connections-lock :initform (bt:make-lock "connections-lock"))
-
-   (exposed :initform (make-hash-table :test 'equal))
+(defclass transport ()
+  ((exposed :initform (make-hash-table :test 'equal))
 
    (need-jsonrpc-field-p :initarg :need-jsonrpc-field-p :initform t)
    (id-type :initarg :id-type :initform :number :type (satisfies transport-id-type-p))
    ))
 
-(defgeneric start (transport))
+(defgeneric jsonrpc-connect (client))
+(defgeneric jsonrpc-listen (server))
 (defgeneric transport-finalize-connection (transport connection))
 
 ;;;; expose
@@ -78,7 +76,7 @@
 
 ;;;;
 
-(defclass server (transport)
+(defclass server (transport event-emitter)
   ((listener
     :initform nil
     :documentation "Server transport have listner thread. Client transport does not have thread usually.")))

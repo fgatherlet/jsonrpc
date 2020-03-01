@@ -2,7 +2,7 @@
 
 (defvar *connection*)
 
-(defclass connection (event-emitter)
+(defclass connection ()
   ((io :initarg :io)
 
    (transport :initarg :transport)
@@ -126,12 +126,7 @@
                (chanl:send (slot-value connection 'inbox) payload)
                (connection-notify-ready connection))
 
-       ;; finalize connection
        (connection-finalize connection)
-       ;;(when (bt:thread-alive-p (slot-value connection 'processor))
-       ;;  (bt:destroy-thread processor))
-       ;;(setf (slot-value connection 'processor) nil
-       ;;      (slot-value connection 'reader) nil)
        ))
    :name name
    ))

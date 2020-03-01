@@ -89,5 +89,6 @@
    #:websocket-client
    ;;#:stdio-transport cannot understand the neccesity.
 
-   #:start
+   #:jsonrpc-listen
+   #:jsonrpc-connect
    ))

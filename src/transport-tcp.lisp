@@ -35,7 +35,7 @@
     (close io)
     ))
 
-(defmethod start ((transport tcp-client))
+(defmethod jsonrpc-connect ((transport tcp-client))
   (with-slots (host port securep) transport
     (let ((io (usocket:socket-stream
                (usocket:socket-connect host port :element-type '(unsigned-byte 8)))))
@@ -52,7 +52,7 @@
 
         connection))))
 
-(defmethod start ((transport tcp-server))
+(defmethod jsonrpc-listen ((transport tcp-server))
   (with-slots (listener host port) transport
     (when listener (error "already listeneing"))
     (setf listener
@@ -76,12 +76,12 @@
                                      processor (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'%payload-writer-tcp))
 
                                ;; delegate transport to manage connection
-                               (emit :open transport connection)
+                               (emit :accepted transport connection)
 
                                ))))
 
                    ;; finalize listener
-                   (emit :end-of-listner transport)
+                   (emit :end-of-listening transport)
                    ))))
            :name "jsonrpc/transport/tcp listener"
            ))))
