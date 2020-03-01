@@ -61,10 +61,10 @@
 (asdf:register-system-packages "clack-handler-hunchentoot" '(#:clack.handler.hunchentoot))
 
 (defsystem "jsonrpc/t"
-  :class :package-inferred-system
-  :depends-on ("rove"
-               "jsonrpc/tests/request-response"
-               "jsonrpc/tests/transport/tcp"
-               "jsonrpc/tests/transport/stdio"
-               "jsonrpc/tests/transport/websocket")
+  ;;:class :package-inferred-system
+  :depends-on (:rove :jsonrpc)
+  :components ((:module
+                "t"
+                :components
+                ((:file "_"))))
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
