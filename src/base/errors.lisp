@@ -47,4 +47,5 @@
 
 
 (define-condition transport-already-listening (error) ())
+(define-condition transport-disposed (error) ())
 (define-condition connection-is-dead (error) ())

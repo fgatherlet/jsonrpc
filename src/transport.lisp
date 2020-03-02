@@ -71,9 +71,11 @@
 ;;;; server
 
 (defclass server (transport event-emitter)
-  ((listener
-    :initform nil
-    :documentation "Server transport have listner thread. Client transport does not have thread usually.")))
+  (;;(listener
+   ;; :initform nil
+   ;; :documentation "Server transport have listner thread. Client transport does not have thread usually."
+   ))
 
 (defgeneric transport-listen (server))
+;;(defgeneric transport-dispose-listener (server))
 

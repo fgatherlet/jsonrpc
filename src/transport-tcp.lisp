@@ -77,39 +77,37 @@
         connection))))
 
 (defmethod transport-listen ((transport tcp-server))
-  (with-slots (listener host port) transport
-    (when listener (error 'transport-already-listening))
-    (setf listener
-          (bt:make-thread
-           (lambda ()
-             (usocket:with-socket-listener (server-socket host port :reuse-address t :element-type '(unsigned-byte 8))
-               (let ((bt:*default-special-bindings* (append bt:*default-special-bindings*
-                                                            `((*standard-output* . ,*standard-output*)
-                                                              (*error-output* . ,*error-output*)))))
-
-                 (unwind-protect
-                      (loop
-                         (usocket:wait-for-input (list server-socket) :timeout 10)
-                         (when (member (usocket:socket-state server-socket) '(:read :read-write))
-                           (let* ((socket (usocket:socket-accept server-socket))
-                                  (connection (make-instance 'connection
-                                                             :io (usocket:socket-stream socket)
-                                                             :transport transport)))
-                             (let ((processor (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'%payload-writer-tcp)))
-                               (transport-tcp-start-reader connection
-                                                           :name "jsownrpc/tcp-server/reader"
-                                                           :processor processor
-                                                           )
-
-                               ;; delegate transport to manage connection
-                               (emit :accepted transport connection)
-                               ))))
-
-                   ;; finalize listener
-                   (emit :end-of-listening transport)
-                   ))))
-           :name "jsonrpc/transport/tcp listener"
-           ))))
+  (with-slots (host port) transport
+    ;;  (when listener (error 'transport-already-listening))
+    ;;  (setf listener
+    ;;        (bt:make-thread
+    ;;         (lambda ()
+    (usocket:with-socket-listener (server-socket host port :reuse-address t :element-type '(unsigned-byte 8))
+      (let ((bt:*default-special-bindings* (append bt:*default-special-bindings*
+                                                   `((*standard-output* . ,*standard-output*)
+                                                     (*error-output* . ,*error-output*)))))
+        
+        (unwind-protect
+             (loop
+                (usocket:wait-for-input (list server-socket) :timeout 10)
+                (when (member (usocket:socket-state server-socket) '(:read :read-write))
+                  (let* ((socket (usocket:socket-accept server-socket))
+                         (connection (make-instance 'connection
+                                                    :io (usocket:socket-stream socket)
+                                                    :transport transport)))
+                    (let ((processor (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'%payload-writer-tcp)))
+                      (transport-tcp-start-reader connection
+                                                  :name "jsownrpc/tcp-server/reader"
+                                                  :processor processor
+                                                  )
+                      
+                      ;; delegate transport to manage connection
+                      (emit :accepted transport connection)
+                      ))))
+          
+          ;; finalize listener
+          (emit :end-of-listening transport)
+          )))))
 
 ;;;; internal
 

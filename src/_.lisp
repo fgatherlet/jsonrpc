@@ -66,12 +66,12 @@
    ;;; entity
    ;;#:entity
 
-   #:client
-   ;;#:client-disconnect
-   #:server
 
    #:call-async
    #:call
+
+   #:disconnect
+   #:alivep
 
    ;;; payload
    #:request
@@ -85,8 +85,11 @@
    #:websocket-transport
    #:websocket-server
    #:websocket-client
-   ;;#:stdio-transport cannot understand the neccesity.
 
    #:transport-listen
+   #:transport-dispose-listener
    #:transport-connect
+
+   #:client
+   #:server
    ))
