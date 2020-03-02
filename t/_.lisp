@@ -27,10 +27,31 @@
 ;; (update-ws-url)
 
 (defvar *tr*)
+(defvar *thr*)
+
 (defvar *tr1*)
+(defvar *thr1*)
 
 (deftest etc
   (testing "basic"
+
+    (progn
+      (setq *tr* (make-instance 'jsonrpc:websocket-server :url *ws-url*))
+      (setq *thr* (bt:make-thread (lambda () (jsonrpc:transport-listen *tr*))))
+      (sleep 0.1)
+
+      ;; (jsonrpc:transport-listen *tr*)
+      ;; USOCKET:ADDRESS-IN-USE-ERROR
+      (ok (signals (jsonrpc:transport-listen *tr*) 'error))
+      (sleep 0.1)
+      
+      (bt:destroy-thread *thr*)
+      (sleep 0.1)
+      
+      (setq *thr* (bt:make-thread (lambda () (jsonrpc:transport-listen *tr*))))
+      (sleep 0.1)
+      (bt:destroy-thread *thr*)
+      )
 
     #+nil(progn
            (setf *tr* (make-instance 'jsonrpc:websocket-server :url *ws-url*))
@@ -77,9 +98,10 @@
         (ok (signals (jsonrpc:call connection "sum" '(20 40))
                      'jsonrpc::connection-is-dead))
         ))
+
     
-    
-    
+
+
     (let ((port (jsonrpc::random-port)))
       (let (transport)
         (setq transport (make-instance 'jsonrpc:websocket-server :url (format nil "ws://localhost:~d/a" port)))

@@ -76,69 +76,68 @@
                                (url (slot-value transport 'url))
                                (uri (quri:uri url))
                                )
-  ;;(with-slots (listener) transport
-  ;;  (when (eql :disposed listener) (error 'transport-disposed))
-  ;;  (when listener (error 'transport-already-listening))
-  ;;(setf
-  ;;   listener
-  ;;   (bt:make-thread
-  ;;    (lambda ()
-  (handler-case
-      (clack:clackup
-       (lambda (env)
-         (block nil
-           ;; Return 200 OK for non-WebSocket requests
-           (unless (wsd:websocket-p env) (return '(200 () ("ok"))))
-           
-           ;;(logd "env:~a (~s)" env env)
-           (unless (equal (quri:uri-path uri) (getf env :path-info))
-             (return '(404 () ("unknown endpoint"))))
-           
-           ;; new connection
-           (let* ((io (wsd:make-server env))
-                  (connection (make-instance 'connection :io io :transport transport)))
-             
-             (on :close io
-                 (lambda (&key code reason)
-                   (declare (ignore code reason))
-                   (transport-finalize-connection (slot-value connection 'transport) connection)
-                   ))
-             
-             (on :message io
-                 (lambda (input)
-                   ;; ------------------------------
-                   ;; read and (enqueue request to inbox) or (dispatch response)
-                   (let ((payload (handler-case
-                                      (message-json-to-payload input :need-jsonrpc-field-p (slot-value transport 'need-jsonrpc-field-p))
-                                    (jsonrpc-error ()
-                                      ;; Nothing can be done
-                                      nil))))
-                     ;; enqueue to inbox
-                     (when payload
-                       (chanl:send (slot-value connection 'inbox) payload)
-                       (connection-notify-ready connection))
-                     )))
-             
-             (lambda (responder)
-               (declare (ignore responder))
-               
-               (setf (slot-value connection 'processor)
-                     (connection-processor connection
-                                           :name "jsownrpc/websocket-server/processor"
-                                           :payload-writer #'%payload-writer-websocket))
-               
+  (let (app)
+    (unwind-protect
+         (setq app (clack:clackup
+                    (lambda (env)
+                      (block nil
+                        ;; Return 200 OK for non-WebSocket requests
+                        (unless (wsd:websocket-p env) (return '(200 () ("ok"))))
+                        
+                        ;;(logd "env:~a (~s)" env env)
+                        (unless (equal (quri:uri-path uri) (getf env :path-info))
+                          (return '(404 () ("unknown endpoint"))))
+                        
+                        ;; new connection
+                        (let* ((io (wsd:make-server env))
+                               (connection (make-instance 'connection :io io :transport transport)))
+                          
+                          (on :close io
+                              (lambda (&key code reason)
+                                (declare (ignore code reason))
+                                (transport-finalize-connection (slot-value connection 'transport) connection)
+                                ))
+                          
+                          (on :message io
+                              (lambda (input)
+                                ;; ------------------------------
+                                ;; read and (enqueue request to inbox) or (dispatch response)
+                                (let ((payload (handler-case
+                                                   (message-json-to-payload input :need-jsonrpc-field-p (slot-value transport 'need-jsonrpc-field-p))
+                                                 (jsonrpc-error ()
+                                                   ;; Nothing can be done
+                                                   nil))))
+                                  ;; enqueue to inbox
+                                  (when payload
+                                    (chanl:send (slot-value connection 'inbox) payload)
+                                    (connection-notify-ready connection))
+                                  )))
+                          
+                          (lambda (responder)
+                            (declare (ignore responder))
+                            
+                            (setf (slot-value connection 'processor)
+                                  (connection-processor connection
+                                                        :name "jsownrpc/websocket-server/processor"
+                                                        :payload-writer #'%payload-writer-websocket))
+                            
               ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-               ;; main (reader) thread. guess synchronous.
-               (wsd:start-connection io)
-               ))))
-       
-       :host (quri:uri-host uri)
-       :port (quri:uri-port uri)
-       :server :hunchentoot
-       :debug (slot-value transport 'debug)
-       :use-thread nil)
-    (error (e) (logd "clackup catch condition:~a" e))
-    ))
+                            ;; main (reader) thread. guess synchronous.
+                            (unwind-protect
+                                 (wsd:start-connection io)
+                              (wsd:close-connection io))
+                            ))))
+                    :host (quri:uri-host uri)
+                    :port (quri:uri-port uri)
+                    :server :hunchentoot
+                    :debug (slot-value transport 'debug)
+                    :use-thread nil))
+      ;; fail to laucnh or thread break
+      (progn
+        (logd "clack:stop app from")
+        (ignore-errors (when app (clack:stop app)))
+        (logd "clack:stop app to")
+        ))))
 
 ;;(defmethod transport-dispose-listener ((transport websocket-server))
 ;;  (with-slots (listener) transport
