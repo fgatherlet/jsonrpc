@@ -75,7 +75,7 @@
 
 (defmethod transport-listen ((transport websocket-server))
   (with-slots (listener) transport
-    (when listener (error "already listening."))
+    (when listener (error 'transport-already-listening))
 
     (setf
      listener

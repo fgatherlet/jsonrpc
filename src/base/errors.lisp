@@ -44,3 +44,7 @@
   (jsown:to-json
    `(:obj ("code" . ,(slot-value obj 'code))
           ("message" . ,(slot-value obj 'message)))))
+
+
+(define-condition transport-already-listening (error)
+  ())

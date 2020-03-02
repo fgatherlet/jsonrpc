@@ -54,7 +54,7 @@
 
 (defmethod transport-listen ((transport tcp-server))
   (with-slots (listener host port) transport
-    (when listener (error "already listeneing"))
+    (when listener (error 'transport-already-listening))
     (setf listener
           (bt:make-thread
            (lambda ()

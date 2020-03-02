@@ -47,3 +47,18 @@
         (setq transport (make-instance 'jsonrpc:tcp-client :url (format nil "http://127.0.0.1:~d" port)))
         (setq connection (jsonrpc:transport-connect transport))
         (jsonrpc:call connection "sum" '(20 40))))))
+
+
+(deftest tcp-etc
+  (testing "basic"
+    (let ((port (jsonrpc::random-port)))
+      (let (transport)
+        (setq transport (make-instance 'jsonrpc:websocket-server :url (format nil "ws://localhost:~d/a" port)))
+        (jsonrpc:expose transport "sum" (lambda (args)
+                                          ;;(format t ">>>>>>server. args:~a~%" args)
+                                          (reduce #'+ args)
+                                          ))
+        (jsonrpc:transport-listen transport)
+        (ok (signals (jsonrpc:transport-listen transport)
+                     'jsonrpc::transport-already-listening))))))
+      
