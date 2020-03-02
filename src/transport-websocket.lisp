@@ -12,9 +12,6 @@
    (debug :initarg :debug
           :initform t)))
 
-(defclass websocket-client (websocket-transport client) ())
-(defclass websocket-server (websocket-transport server) ())
-
 (defmethod initialize-instance :after ((transport websocket-transport) &rest initargs &key url &allow-other-keys)
   (declare (ignore initargs))
   (when url
@@ -29,10 +26,9 @@
 
 (defmethod transport-alive-connection-p ((transport websocket-transport) connectionh)
   (and (slot-value connectionh 'io)
-       (member (wsd:ready-state (slot-value connectionh 'io))
-               (list :open))))
+       (eql (wsd:ready-state (slot-value connectionh 'io)) :open)))
 
-(defmethod transport-term-connection ((transport websocket-transport) (connection connection))
+(defmethod transport-disconnect ((transport websocket-transport) (connection connection))
   (wsd:close-connection (slot-value connection 'io)))
 
 (defmethod transport-finalize-connection ((transport websocket-transport) (connection connection))
@@ -40,6 +36,15 @@
     (when (bt:thread-alive-p processor) (bt:destroy-thread processor))
     (setq processor nil)
     ))
+
+(defun %payload-writer-websocket (connection payload)
+  (let ((json (jsown:to-json payload))
+        (ws (slot-value connection 'io)))
+    (wsd:send ws json)))
+
+;;;; client
+
+(defclass websocket-client (websocket-transport client) ())
 
 (defmethod transport-connect ((transport websocket-client))
   (let* ((io (wsd:make-client (format nil "~A://~A:~A~A"
@@ -74,6 +79,10 @@
 
     connection))
 
+;;;; server
+
+(defclass websocket-server (websocket-transport server) ())
+
 (defmethod transport-listen ((transport websocket-server))
   (with-slots (listener) transport
     (when listener (error 'transport-already-listening))
@@ -93,6 +102,12 @@
                                             :transport transport
                                             )))
 
+            (on :close io
+                (lambda (&key code reason)
+                  (declare (ignore code reason))
+                  (transport-finalize-connection (slot-value connection 'transport) connection)
+                  ))
+
             (on :message io
                 (lambda (input)
                   ;; ------------------------------
@@ -107,12 +122,6 @@
                       (chanl:send (slot-value connection 'inbox) payload)
                       (connection-notify-ready connection))
                     )))
-
-            (on :close io
-                (lambda (&key code reason)
-                  (declare (ignore code reason))
-                  (transport-finalize-connection (slot-value connection 'transport) connection)
-                  ))
 
             (lambda (responder)
               (declare (ignore responder))
@@ -133,7 +142,3 @@
       :use-thread t))))
 
 
-(defun %payload-writer-websocket (connection payload)
-  (let ((json (jsown:to-json payload))
-        (ws (slot-value connection 'io)))
-    (wsd:send ws json)))

@@ -28,17 +28,14 @@
 (defmethod transport-alive-connection-p ((transport tcp-transport) connectionh)
   (slot-value connectionh 'reader))
 
-(defmethod transport-term-connection ((transport tcp-transport) (connection connection))
+(defmethod transport-disconnect ((transport tcp-transport) (connection connection))
   (bt:destroy-thread (slot-value connection 'reader)))
 
 (defmethod transport-finalize-connection ((transport tcp-transport) (connection connection))
   "Normally called on finalizer of reader thread."
-  (logd "-----")
   (with-slots (reader processor io) connection
     (when (bt:thread-alive-p processor)
-      ;;(logd "suicide?")
       (bt:destroy-thread processor))
-    ;;(logd "suicide--?")
     (setf reader nil
           processor nil)
     (close io)

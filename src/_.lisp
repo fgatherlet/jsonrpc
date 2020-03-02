@@ -73,8 +73,6 @@
    #:call-async
    #:call
 
-   ;; TODO: server-terminate needp?
-
    ;;; payload
    #:request
    #:response

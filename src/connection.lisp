@@ -29,9 +29,8 @@
 
 ;;;; call api
 
-(defun term (connection)
-  (transport-term-connection (slot-value connection 'transport) connection))
-;;(connection-eninbox-payload connection :term))
+(defun disconnect (connection)
+  (transport-disconnect (slot-value connection 'transport) connection))
 
 (defun alivep (connection)
   (transport-alive-connection-p (slot-value connection 'transport) connection))
@@ -142,40 +141,31 @@
    (lambda ()
      (with-slots (inbox outbox transport) connection
        (unwind-protect
-            (block term
-              (loop
-                 (when (and (chanl:recv-blocks-p inbox)
-                            (chanl:recv-blocks-p outbox))
-                   (connection-wait-for-ready connection))
+            (loop
+               (when (and (chanl:recv-blocks-p inbox)
+                          (chanl:recv-blocks-p outbox))
+                 (connection-wait-for-ready connection))
+               
+               (chanl:select
+                 ;; ------------------------------
+                 ;; handle inbox
+                 ((chanl:recv inbox payload)
+                  (cond
+                    ;; TODO: should I prepare some another channel (like inbox-request, inbox-response)?
+                    ;; request
+                    ((typep payload 'request)
+                     (connection-enoutbox-payload
+                      connection
+                      (connection-handle-request connection payload)))
+                    ;; response
+                    (t
+                     (connection-handle-response connection payload))))
                  
-                 (chanl:select
-                   ;; ------------------------------
-                   ;; handle inbox
-                   ((chanl:recv inbox payload)
-                    (cond
-                      
-                      ;;;; TODO: should I prepare some another channel?
-                      ;;;; term
-                      ;;((eql payload :term)
-                      ;; (logd "TERM start connection:~a reader:~a" connection (slot-value connection 'reader))
-                      ;; (transport-term-connection (slot-value connection 'transport) connection)
-                      ;; (logd "TERM end"))
-                      
-                      ;; TODO: should I prepare some another channel (like inbox-request, inbox-response)?
-                      ;; request
-                      ((typep payload 'request)
-                       (connection-enoutbox-payload
-                        connection
-                        (connection-handle-request connection payload)))
-                      ;; response
-                      (t
-                       (connection-handle-response connection payload))))
-                   
-                   ;; ------------------------------
-                   ;; handle outbox
-                   ((chanl:recv outbox payload)
-                    (funcall payload-writer connection payload))
-                   )))
+                 ;; ------------------------------
+                 ;; handle outbox
+                 ((chanl:recv outbox payload)
+                  (funcall payload-writer connection payload))
+                 ))
          )))
    :name name
    ))
