@@ -29,10 +29,20 @@
 
 ;;;; call api
 
+(defun term (connection)
+  (connection-eninbox-payload connection :term))
+
+(defun alivep (connection)
+  (transport-alive-connection-p (slot-value connection 'transport) connection))
+;;(with-slots (reader) connection
+;;    reader))
+
 (defun call-async (connection method params &key callback &aux id)
   "You can notify with callback being nil."
   (check-type params jsonrpc-params)
   (check-type connection connection)
+
+  (unless (alivep connection) (error 'connection-is-dead))
 
   (when callback
     (setq id (make-id :id-type (slot-value (slot-value connection 'transport) 'id-type)))
@@ -86,6 +96,11 @@
     (chanl:send (slot-value connection 'outbox) payload)
     (connection-notify-ready connection)))
 
+(defun connection-eninbox-payload (connection payload)
+  (when payload
+    (chanl:send (slot-value connection 'inbox) payload)
+    (connection-notify-ready connection)))
+
 (defun connection-handle-request (connection request
                                   &aux (transport (slot-value connection 'transport)))
   (flet ((proc (request)
@@ -116,39 +131,45 @@
                   (remhash id response-callback))
               (setf (gethseash id response-map) response))))))))
 
-;;(defun connection-finalize (connection)
-;;  (with-slots (transport) connection
-;;    (transport-finalize-connection transport connection)))
-
 (defun connection-processor (connection &key payload-writer (name "processor"))
   (bt:make-thread
    (lambda ()
      (with-slots (inbox outbox transport) connection
        (unwind-protect
-            (loop
-               (when (and (chanl:recv-blocks-p inbox)
-                          (chanl:recv-blocks-p outbox))
-                 (connection-wait-for-ready connection))
-
-               (chanl:select
-                ;; ------------------------------
-                ;; handle inbox
-                ((chanl:recv inbox payload)
-                 (cond
-                   ;; request
-                   ((typep payload 'request)
-                    (connection-enoutbox-payload
-                     connection
-                     (connection-handle-request connection payload)))
-                   ;; response
-                   (t
-                    (connection-handle-response connection payload))))
-
-                ;; ------------------------------
-                ;; handle outbox
-                ((chanl:recv outbox payload)
-                 (funcall payload-writer connection payload))
-                ))
+            (block term
+              (loop
+                 (when (and (chanl:recv-blocks-p inbox)
+                            (chanl:recv-blocks-p outbox))
+                   (connection-wait-for-ready connection))
+                 
+                 (chanl:select
+                   ;; ------------------------------
+                   ;; handle inbox
+                   ((chanl:recv inbox payload)
+                    (cond
+                      
+                      ;; TODO: should I prepare some another channel?
+                      ;; term
+                      ((eql payload :term)
+                       (logd "TERM start connection:~a reader:~a" connection (slot-value connection 'reader))
+                       (transport-term-connection (slot-value connection 'transport) connection)
+                       (logd "TERM end"))
+                      
+                      ;; TODO: should I prepare some another channel (like inbox-request, inbox-response)?
+                      ;; request
+                      ((typep payload 'request)
+                       (connection-enoutbox-payload
+                        connection
+                        (connection-handle-request connection payload)))
+                      ;; response
+                      (t
+                       (connection-handle-response connection payload))))
+                   
+                   ;; ------------------------------
+                   ;; handle outbox
+                   ((chanl:recv outbox payload)
+                    (funcall payload-writer connection payload))
+                   )))
          )))
    :name name
    ))
@@ -166,3 +187,4 @@
               (remhash id response-map))
           (setf (gethash id response-callback) callback))))
     (values)))
+

@@ -16,7 +16,9 @@
 
 (defgeneric transport-connect (client))
 (defgeneric transport-listen (server))
+(defgeneric transport-term-connection (transport connection))
 (defgeneric transport-finalize-connection (transport connection))
+(defgeneric transport-alive-connection-p (transport connection))
 
 ;;;; expose
 

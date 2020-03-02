@@ -27,16 +27,19 @@
       (setf (slot-value transport 'path) (or (quri:uri-path uri) "/"))))
   transport)
 
-(defmethod transport-finalize-connection ((transport websocket-transport) (connection connection))
-  (with-slots (reader processor io) connection
-    (when (bt:thread-alive-p processor)
-      (bt:destroy-thread processor))
-    (setq reader nil
-          processor nil)
-    ;;(when (member (wsd:ready-state io) '(:open :opening))
-    ;;(wsd:close-connection io))
-    ))
+(defmethod transport-alive-connection-p ((transport websocket-transport) connectionh)
+  (and (slot-value connectionh 'io)
+       (member (wsd:ready-state (slot-value connectionh 'io))
+               (list :open))))
 
+(defmethod transport-term-connection ((transport websocket-transport) (connection connection))
+  (wsd:close-connection (slot-value connection 'io)))
+
+(defmethod transport-finalize-connection ((transport websocket-transport) (connection connection))
+  (with-slots (processor io) connection
+    (when (bt:thread-alive-p processor) (bt:destroy-thread processor))
+    (setq processor nil)
+    ))
 
 (defmethod transport-connect ((transport websocket-client))
   (let* ((io (wsd:make-client (format nil "~A://~A:~A~A"
@@ -49,11 +52,7 @@
     (on :close io
         (lambda (&key code reason)
           (declare (ignore code reason))
-          (with-slots (processor) connection
-            (close-connection connection))))
-    ;;;; finalizer
-    ;;(when (bt:thread-alive-p processor) (bt:destroy-thread processor))
-    ;;(setf (slot-value connection 'processor) nil))))
+          (transport-finalize-connection transport connection)))
 
     (on :message io
         ;; ------------------------------
@@ -82,6 +81,7 @@
     (setf
      listener
      (clack:clackup
+
       (lambda (env)
         (block nil
           ;; Return 200 OK for non-WebSocket requests
@@ -117,18 +117,14 @@
             (lambda (responder)
               (declare (ignore responder))
 
-              (with-slots (processor reader) connection
-                (setf processor (connection-processor connection :name "jsownrpc/websocket-server/processor" :payload-writer #'%payload-writer-websocket))
-                (setf reader (bt:current-thread))
-                (unwind-protect
-                     ;; main (reader) thread
-                     (wsd:start-connection io)
+              (setf (slot-value connection 'processor)
+                    (connection-processor connection
+                                          :name "jsownrpc/websocket-server/processor"
+                                          :payload-writer #'%payload-writer-websocket))
 
-                  ;; finalizer
-                  (wsd:close-connection io)
-                  (when (bt:thread-alive-p processor) (bt:destroy-thread processor))
-                  (setf processor nil reader nil)
-                  ))))))
+              ;; main (reader) thread. guess synchronous.
+              (wsd:start-connection io)
+              ))))
 
       :host (slot-value transport 'host)
       :port (slot-value transport 'port)

@@ -46,5 +46,5 @@
           ("message" . ,(slot-value obj 'message)))))
 
 
-(define-condition transport-already-listening (error)
-  ())
+(define-condition transport-already-listening (error) ())
+(define-condition connection-is-dead (error) ())

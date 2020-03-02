@@ -25,33 +25,40 @@
               port (quri:uri-port uri))))
     transport))
 
+(defmethod transport-alive-connection-p ((transport tcp-transport) connectionh)
+  (slot-value connectionh 'reader))
+
+(defmethod transport-term-connection ((transport tcp-transport) (connection connection))
+  (bt:destroy-thread (slot-value connection 'reader)))
+
 (defmethod transport-finalize-connection ((transport tcp-transport) (connection connection))
   "Normally called on finalizer of reader thread."
+  (logd "-----")
   (with-slots (reader processor io) connection
     (when (bt:thread-alive-p processor)
+      ;;(logd "suicide?")
       (bt:destroy-thread processor))
+    ;;(logd "suicide--?")
     (setf reader nil
           processor nil)
     (close io)
     ))
 
-(defun transport-tcp-start-reader (connection &key payload-reader processor (name "reader"))
+(defun transport-tcp-start-reader (connection &key processor (name "reader"))
   (setf (slot-value connection 'processor) processor)
-  (bt:make-thread
-   (lambda ()
-     (unwind-protect
-          (loop for payload = (funcall payload-reader connection)
-             while payload
-             do
-               (chanl:send (slot-value connection 'inbox) payload)
-               (connection-notify-ready connection))
-       
-       ;;(connection-finalize connection)
-       ;;(with-slots (transport) connection
-       (transport-finalize-connection (slot-value connection 'transport) connection)
-       ))
-   :name name
-   ))
+  (setf (slot-value connection 'reader)
+        (bt:make-thread
+         (lambda ()
+           (unwind-protect
+                (loop for payload = (%payload-reader-tcp connection)
+                   while payload
+                   do
+                     (chanl:send (slot-value connection 'inbox) payload)
+                     (connection-notify-ready connection))
+             (transport-finalize-connection (slot-value connection 'transport) connection)
+             ))
+         :name name
+         )))
 
 (defmethod transport-connect ((transport tcp-client))
   (with-slots (host port securep) transport
@@ -68,7 +75,7 @@
           (transport-tcp-start-reader connection
                                       :name "jsownrpc/tcp-client/reader"
                                       :processor processor
-                                      :payload-reader #'%payload-reader-tcp))
+                                      ))
 
         connection))))
 
@@ -95,7 +102,7 @@
                                (transport-tcp-start-reader connection
                                                            :name "jsownrpc/tcp-server/reader"
                                                            :processor processor
-                                                           :payload-reader #'%payload-reader-tcp)
+                                                           )
 
                                ;; delegate transport to manage connection
                                (emit :accepted transport connection)
