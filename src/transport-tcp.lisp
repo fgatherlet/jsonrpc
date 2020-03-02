@@ -35,7 +35,7 @@
     (close io)
     ))
 
-(defmethod jsonrpc-connect ((transport tcp-client))
+(defmethod transport-connect ((transport tcp-client))
   (with-slots (host port securep) transport
     (let ((io (usocket:socket-stream
                (usocket:socket-connect host port :element-type '(unsigned-byte 8)))))
@@ -52,7 +52,7 @@
 
         connection))))
 
-(defmethod jsonrpc-listen ((transport tcp-server))
+(defmethod transport-listen ((transport tcp-server))
   (with-slots (listener host port) transport
     (when listener (error "already listeneing"))
     (setf listener

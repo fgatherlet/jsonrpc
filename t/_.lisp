@@ -16,13 +16,13 @@
                                           (reduce #'+ args)
                                           ))
         
-        (jsonrpc:jsonrpc-listen transport))
+        (jsonrpc:transport-listen transport))
       
       (sleep 0.2)
       
       (let (transport connection)
         (setq transport (make-instance 'jsonrpc:websocket-client :url (format nil "ws://127.0.0.1:~d/a" port)))
-        (setq connection (jsonrpc:jsonrpc-connect transport))
+        (setq connection (jsonrpc:transport-connect transport))
         (ok (= 60 (jsonrpc:call connection "sum" '(20 40))))))))
 
 
@@ -39,11 +39,11 @@
                                           (format t ">>>>>>server. args:~a~%" args)
                                           (reduce #'+ args)
                                           ))
-        (jsonrpc:jsonrpc-listen transport))
+        (jsonrpc:transport-listen transport))
       
       (sleep 0.2)
       
       (let (transport connection)
         (setq transport (make-instance 'jsonrpc:tcp-client :url (format nil "http://127.0.0.1:~d" port)))
-        (setq connection (jsonrpc:jsonrpc-connect transport))
+        (setq connection (jsonrpc:transport-connect transport))
         (jsonrpc:call connection "sum" '(20 40))))))

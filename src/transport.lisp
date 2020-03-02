@@ -14,8 +14,8 @@
    (id-type :initarg :id-type :initform :number :type (satisfies transport-id-type-p))
    ))
 
-(defgeneric jsonrpc-connect (client))
-(defgeneric jsonrpc-listen (server))
+(defgeneric transport-connect (client))
+(defgeneric transport-listen (server))
 (defgeneric transport-finalize-connection (transport connection))
 
 ;;;; expose

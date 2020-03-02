@@ -38,7 +38,7 @@
     ))
 
 
-(defmethod jsonrpc-connect ((transport websocket-client))
+(defmethod transport-connect ((transport websocket-client))
   (let* ((io (wsd:make-client (format nil "~A://~A:~A~A"
                                       (if (slot-value transport 'securep) "wss" "ws")
                                       (slot-value transport 'host)
@@ -73,7 +73,7 @@
 
     connection))
 
-(defmethod jsonrpc-listen ((transport websocket-server))
+(defmethod transport-listen ((transport websocket-server))
   (with-slots (listener) transport
     (when listener (error "already listening."))
 
