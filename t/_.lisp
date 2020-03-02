@@ -105,7 +105,7 @@
         (setq transport (make-instance 'jsonrpc:websocket-server :url (format nil "ws://localhost:~d/a" port)))
         (jsonrpc:expose transport "sum" (lambda (args) (reduce #'+ args)))
         
-        (bt:make-thread (lambda () (jsonrpc:transport-listen transport))))a
+        (bt:make-thread (lambda () (jsonrpc:transport-listen transport))))
       
       (sleep 0.2)
       
