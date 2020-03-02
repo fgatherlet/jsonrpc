@@ -116,25 +116,9 @@
                   (remhash id response-callback))
               (setf (gethseash id response-map) response))))))))
 
-(defun connection-reader (connection &key payload-reader (name "reader"))
-  (bt:make-thread
-   (lambda ()
-     (unwind-protect
-          (loop for payload = (funcall payload-reader connection)
-             while payload
-             do
-               (chanl:send (slot-value connection 'inbox) payload)
-               (connection-notify-ready connection))
-
-       (connection-finalize connection)
-       ))
-   :name name
-   ))
-
-(defun connection-finalize (connection)
-  (with-slots (transport) connection
-    (transport-finalize-connection transport connection)))
-
+;;(defun connection-finalize (connection)
+;;  (with-slots (transport) connection
+;;    (transport-finalize-connection transport connection)))
 
 (defun connection-processor (connection &key payload-writer (name "processor"))
   (bt:make-thread

@@ -35,6 +35,24 @@
     (close io)
     ))
 
+(defun transport-tcp-start-reader (connection &key payload-reader processor (name "reader"))
+  (setf (slot-value connection 'processor) processor)
+  (bt:make-thread
+   (lambda ()
+     (unwind-protect
+          (loop for payload = (funcall payload-reader connection)
+             while payload
+             do
+               (chanl:send (slot-value connection 'inbox) payload)
+               (connection-notify-ready connection))
+       
+       ;;(connection-finalize connection)
+       ;;(with-slots (transport) connection
+       (transport-finalize-connection (slot-value connection 'transport) connection)
+       ))
+   :name name
+   ))
+
 (defmethod transport-connect ((transport tcp-client))
   (with-slots (host port securep) transport
     (let ((io (usocket:socket-stream
@@ -46,9 +64,11 @@
             (bt:*default-special-bindings* (append bt:*default-special-bindings*
                                                    `((*standard-output* . ,*standard-output*)
                                                      (*error-output* . ,*error-output*)))))
-        (with-slots (reader processor) connection
-          (setf reader (connection-reader connection :name "jsownrpc/tcp-client/reader" :payload-reader #'%payload-reader-tcp)
-                processor (connection-processor connection :name "jsownrpc/tcp-client/processor" :payload-writer #'%payload-writer-tcp)))
+        (let ((processor (connection-processor connection :name "jsownrpc/tcp-client/processor" :payload-writer #'%payload-writer-tcp)))
+          (transport-tcp-start-reader connection
+                                      :name "jsownrpc/tcp-client/reader"
+                                      :processor processor
+                                      :payload-reader #'%payload-reader-tcp))
 
         connection))))
 
@@ -71,13 +91,14 @@
                                   (connection (make-instance 'connection
                                                              :io (usocket:socket-stream socket)
                                                              :transport transport)))
-                             (with-slots (io reader processor) connection
-                               (setf reader (connection-reader connection :name "jsownrpc/tcp-server/reader" :payload-reader #'%payload-reader-tcp)
-                                     processor (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'%payload-writer-tcp))
+                             (let ((processor (connection-processor connection :name "jsownrpc/tcp-server/processor" :payload-writer #'%payload-writer-tcp)))
+                               (transport-tcp-start-reader connection
+                                                           :name "jsownrpc/tcp-server/reader"
+                                                           :processor processor
+                                                           :payload-reader #'%payload-reader-tcp)
 
                                ;; delegate transport to manage connection
                                (emit :accepted transport connection)
-
                                ))))
 
                    ;; finalize listener

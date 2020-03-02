@@ -66,7 +66,9 @@
               ))))
 
     (setf (slot-value connection 'processor)
-          (connection-processor connection :name "jsownrpc/websocket-client/processor" :payload-writer #'payload-writer-websocket))
+          (connection-processor connection
+                                :name "jsownrpc/websocket-client/processor"
+                                :payload-writer #'%payload-writer-websocket))
 
     ;; main (reader) thread. guess synchronous.
     (wsd:start-connection io)
@@ -109,12 +111,14 @@
             (on :close io
                 (lambda (&key code reason)
                   (declare (ignore code reason))
-                  (connection-finalize connection)))
+                  (transport-finalize-connection (slot-value connection 'transport) connection)
+                  ))
 
             (lambda (responder)
               (declare (ignore responder))
+
               (with-slots (processor reader) connection
-                (setf processor (connection-processor connection :name "jsownrpc/websocket-server/processor" :payload-writer #'payload-writer-websocket))
+                (setf processor (connection-processor connection :name "jsownrpc/websocket-server/processor" :payload-writer #'%payload-writer-websocket))
                 (setf reader (bt:current-thread))
                 (unwind-protect
                      ;; main (reader) thread
@@ -133,7 +137,7 @@
       :use-thread t))))
 
 
-(defun payload-writer-websocket (connection payload)
+(defun %payload-writer-websocket (connection payload)
   (let ((json (jsown:to-json payload))
         (ws (slot-value connection 'io)))
     (wsd:send ws json)))
