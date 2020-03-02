@@ -1,14 +1,7 @@
 (in-package #:jsonrpc)
 
 (defclass websocket-transport ()
-  ((host :initarg :host
-         :initform "127.0.0.1")
-   (port :initarg :port
-         :initform (random-port))
-   (path :initarg :path
-         :initform "/")
-   (securep :initarg :securep
-            :initform nil)
+  ((url :initarg :url :initform nil)
    (debug :initarg :debug
           :initform t)))
 
@@ -18,15 +11,10 @@
     (let ((uri (quri:uri url)))
       (unless (member (quri:uri-scheme uri) '("ws" "wss") :test #'equalp)
         (error "Only ws or wss are supported for websocket-transport (specified ~S)" (quri:uri-scheme uri)))
-      (setf (slot-value transport 'securep) (equalp (quri:uri-scheme uri) "wss"))
-      (setf (slot-value transport 'host) (quri:uri-host uri))
-      (setf (slot-value transport 'port) (quri:uri-port uri))
-      (setf (slot-value transport 'path) (or (quri:uri-path uri) "/"))))
-  transport)
 
-(defmethod transport-alive-connection-p ((transport websocket-transport) connectionh)
-  (and (slot-value connectionh 'io)
-       (eql (wsd:ready-state (slot-value connectionh 'io)) :open)))
+      (setf (slot-value transport 'url) url)
+      ))
+  transport)
 
 (defmethod transport-disconnect ((transport websocket-transport) (connection connection))
   (wsd:close-connection (slot-value connection 'io)))
@@ -36,6 +24,10 @@
     (when (bt:thread-alive-p processor) (bt:destroy-thread processor))
     (setq processor nil)
     ))
+
+(defmethod transport-alive-connection-p ((transport websocket-transport) connectionh)
+  (and (slot-value connectionh 'io)
+       (eql (wsd:ready-state (slot-value connectionh 'io)) :open)))
 
 (defun %payload-writer-websocket (connection payload)
   (let ((json (jsown:to-json payload))
@@ -47,11 +39,7 @@
 (defclass websocket-client (websocket-transport client) ())
 
 (defmethod transport-connect ((transport websocket-client))
-  (let* ((io (wsd:make-client (format nil "~A://~A:~A~A"
-                                      (if (slot-value transport 'securep) "wss" "ws")
-                                      (slot-value transport 'host)
-                                      (slot-value transport 'port)
-                                      (slot-value transport 'path))))
+  (let* ((io (wsd:make-client (slot-value transport 'url)))
          (connection (make-instance 'connection :io io :transport transport)))
 
     (on :close io
@@ -83,7 +71,11 @@
 
 (defclass websocket-server (websocket-transport server) ())
 
-(defmethod transport-listen ((transport websocket-server))
+(defmethod transport-listen ((transport websocket-server)
+                             &aux
+                               (url (slot-value transport 'url))
+                               (uri (quri:uri url))
+                             )
   (with-slots (listener) transport
     (when listener (error 'transport-already-listening))
 
@@ -96,11 +88,12 @@
           ;; Return 200 OK for non-WebSocket requests
           (unless (wsd:websocket-p env) (return '(200 () ("ok"))))
 
+          ;;(logd "env:~a (~s)" env env)
+          (unless (equal (quri:uri-path uri) (getf env :path-info))
+            (return '(404 () ("unknown endpoint"))))
+
           (let* ((io (wsd:make-server env))
-                 (connection (make-instance 'connection
-                                            :io io
-                                            :transport transport
-                                            )))
+                 (connection (make-instance 'connection :io io :transport transport)))
 
             (on :close io
                 (lambda (&key code reason)
@@ -135,8 +128,8 @@
               (wsd:start-connection io)
               ))))
 
-      :host (slot-value transport 'host)
-      :port (slot-value transport 'port)
+      :host (quri:uri-host uri)
+      :port (quri:uri-port uri)
       :server :hunchentoot
       :debug (slot-value transport 'debug)
       :use-thread t))))

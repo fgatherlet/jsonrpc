@@ -14,22 +14,12 @@
    (id-type :initarg :id-type :initform :number :type (satisfies transport-id-type-p))
    ))
 
-(defgeneric transport-connect (client))
-(defgeneric transport-listen (server))
 (defgeneric transport-disconnect (transport connection))
 (defgeneric transport-finalize-connection (transport connection))
 (defgeneric transport-alive-connection-p (transport connection))
 
-;;;; expose
-
 (defun expose (transport method-name function)
   (setf (gethash method-name (slot-value transport 'exposed)) function))
-
-(defun clear-exposed (transport)
-  (setf (slot-value transport 'exposed) (make-hash-table :test 'equal))
-  (values))
-
-;;;;
 
 (defun transport-request-to-response (transport request
                                 &aux
@@ -72,14 +62,18 @@
 
     (when id (make-response :id id :result result))))
 
-;;;;
+;;;; client
 
 (defclass client (transport) ())
 
-;;;;
+(defgeneric transport-connect (client))
+
+;;;; server
 
 (defclass server (transport event-emitter)
   ((listener
     :initform nil
     :documentation "Server transport have listner thread. Client transport does not have thread usually.")))
+
+(defgeneric transport-listen (server))
 

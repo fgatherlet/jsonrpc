@@ -64,7 +64,7 @@
 
 (deftest etc
   (testing "basic"
-
+    
     (let ((port (jsonrpc::random-port)))
       (let (transport)
         (setq transport (make-instance 'jsonrpc:tcp-server :url (format nil "http://127.0.0.1:~d" port)))
@@ -81,16 +81,16 @@
         (setq connection (jsonrpc:transport-connect transport))
         (ok (= 60 (jsonrpc:call connection "sum" '(20 40))))
         (jsonrpc::term connection)
-
+        
         ;;(sleep 0.2)
         (wait-until (lambda () (not (jsonrpc::alivep connection))))
-
+        
         (ok (signals (jsonrpc:call connection "sum" '(20 40))
                      'jsonrpc::connection-is-dead))
         ))
-
-
-
+    
+    
+    
     (let ((port (jsonrpc::random-port)))
       (let (transport)
         (setq transport (make-instance 'jsonrpc:websocket-server :url (format nil "ws://localhost:~d/a" port)))
@@ -101,8 +101,8 @@
         (jsonrpc:transport-listen transport)
         (ok (signals (jsonrpc:transport-listen transport)
                      'jsonrpc::transport-already-listening))))
-
-
+    
+    
     (let ((port (jsonrpc::random-port)))
       (let (transport)
         (setq transport (make-instance 'jsonrpc:websocket-server :url (format nil "ws://localhost:~d/a" port)))
@@ -122,6 +122,20 @@
         (setq connection1 (jsonrpc:transport-connect transport))
         (ok (= 3 (jsonrpc:call connection "sum" '(1 2))))
         ))
-
-    ))
+    
+    (let ((port (jsonrpc::random-port)))
+      (let (transport)
+        (setq transport (make-instance 'jsonrpc:websocket-server :url (format nil "ws://localhost:~d/a" port)))
+        (jsonrpc:expose transport "sum" (lambda (args) (reduce #'+ args)))
+        
+        (jsonrpc:transport-listen transport))
       
+      (sleep 0.2)
+      
+      (let (transport connection)
+        (setq transport (make-instance 'jsonrpc:websocket-client :url (format nil "ws://127.0.0.1:~d/b" port)))
+        (ok (signals
+             (jsonrpc:transport-connect transport)
+             ;; TODO: bizarre condition on 404 error.
+             'FAST-HTTP.ERROR:CB-FIRST-LINE)))
+      )))
