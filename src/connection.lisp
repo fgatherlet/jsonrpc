@@ -30,7 +30,8 @@
 ;;;; call api
 
 (defun term (connection)
-  (connection-eninbox-payload connection :term))
+  (transport-term-connection (slot-value connection 'transport) connection))
+;;(connection-eninbox-payload connection :term))
 
 (defun alivep (connection)
   (transport-alive-connection-p (slot-value connection 'transport) connection))
@@ -69,9 +70,14 @@
                       (setf (gethash result-lock *call-result*) (or error-condition result))
                       (bt:condition-notify result-cond)))))
 
+    (logd "---- call before lock")
     (with-lock-held (result-lock)
 
+      (logd "---- call lock loop 0")
+
       (unless (bt:condition-wait result-cond result-lock :timeout timeout) (error "JSON-RPC synchronous call has been timeout"))
+
+      (logd "---- call lock loop 1")
 
       (multiple-value-bind (result result-exists-p) (gethash result-lock *call-result*)
         (assert result-exists-p)
@@ -148,12 +154,12 @@
                    ((chanl:recv inbox payload)
                     (cond
                       
-                      ;; TODO: should I prepare some another channel?
-                      ;; term
-                      ((eql payload :term)
-                       (logd "TERM start connection:~a reader:~a" connection (slot-value connection 'reader))
-                       (transport-term-connection (slot-value connection 'transport) connection)
-                       (logd "TERM end"))
+                      ;;;; TODO: should I prepare some another channel?
+                      ;;;; term
+                      ;;((eql payload :term)
+                      ;; (logd "TERM start connection:~a reader:~a" connection (slot-value connection 'reader))
+                      ;; (transport-term-connection (slot-value connection 'transport) connection)
+                      ;; (logd "TERM end"))
                       
                       ;; TODO: should I prepare some another channel (like inbox-request, inbox-response)?
                       ;; request

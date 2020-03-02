@@ -6,6 +6,19 @@
   (:shadowing-import-from #:rove #:*debug-on-error*))
 (in-package #:jsonrpc/t)
 
+(defun wait-until (condition &key (timeout 10) &aux timeout-internal-time)
+  (setf timeout-internal-time
+        (+ (get-internal-run-time)
+           (* timeout internal-time-units-per-second)))
+  
+  (loop
+     (let ((res (funcall condition)))
+       (when res (return-from wait-until)))
+     (when (< timeout-internal-time (get-internal-run-time))
+       (return-from wait-until))
+     (sleep 0.1)
+     ))
+
 (deftest tcp-transport
   (testing "basic"
     (let ((port (jsonrpc::random-port)))
@@ -68,7 +81,10 @@
         (setq connection (jsonrpc:transport-connect transport))
         (ok (= 60 (jsonrpc:call connection "sum" '(20 40))))
         (jsonrpc::term connection)
-        (sleep 0.2)
+
+        ;;(sleep 0.2)
+        (wait-until (lambda () (not (jsonrpc::alivep connection))))
+
         (ok (signals (jsonrpc:call connection "sum" '(20 40))
                      'jsonrpc::connection-is-dead))
         ))
@@ -94,7 +110,6 @@
                                           ;;(format t ">>>>>>server. args:~a~%" args)
                                           (reduce #'+ args)
                                           ))
-        
         (jsonrpc:transport-listen transport))
       
       (sleep 0.2)

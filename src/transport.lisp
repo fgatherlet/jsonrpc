@@ -1,6 +1,6 @@
 (in-package #:jsonrpc)
 
-(defvar *default-timeout* 60)
+(defvar *default-timeout* 5)
 
 (defun %transport-id-type-p (x)
   (member x '(:string :number)))
