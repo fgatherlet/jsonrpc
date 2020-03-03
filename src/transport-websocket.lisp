@@ -83,21 +83,21 @@
                       (block nil
                         ;; Return 200 OK for non-WebSocket requests
                         (unless (wsd:websocket-p env) (return '(200 () ("ok"))))
-                        
+
                         ;;(logd "env:~a (~s)" env env)
                         (unless (equal (quri:uri-path uri) (getf env :path-info))
                           (return '(404 () ("unknown endpoint"))))
-                        
+
                         ;; new connection
                         (let* ((io (wsd:make-server env))
                                (connection (make-instance 'connection :io io :transport transport)))
-                          
+
                           (on :close io
                               (lambda (&key code reason)
                                 (declare (ignore code reason))
                                 (transport-finalize-connection (slot-value connection 'transport) connection)
                                 ))
-                          
+
                           (on :message io
                               (lambda (input)
                                 ;; ------------------------------
@@ -112,15 +112,15 @@
                                     (chanl:send (slot-value connection 'inbox) payload)
                                     (connection-notify-ready connection))
                                   )))
-                          
+
                           (lambda (responder)
                             (declare (ignore responder))
-                            
+
                             (setf (slot-value connection 'processor)
                                   (connection-processor connection
                                                         :name "jsownrpc/websocket-server/processor"
                                                         :payload-writer #'%payload-writer-websocket))
-                            
+
               ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
                             ;; main (reader) thread. guess synchronous.
                             (unwind-protect
@@ -150,4 +150,3 @@
 ;;           ;;   for calling 'close-connection'.
 ;;           ;;   Perhaps, finalization should be done in other places.
 ;;           (slot-value io 'websocket-driver.ws.client::read-thread)))
-
