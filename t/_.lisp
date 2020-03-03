@@ -24,56 +24,62 @@
                          "ws://127.0.0.1:~d/a"
                          (jsonrpc::random-port)
                          )))
-;; (update-ws-url)
 
-(defvar *tr*)
-(defvar *thr*)
+(defvar *server*)
+(defvar *listener*)
 
-(defvar *tr1*)
-(defvar *thr1*)
+(defvar *server1*)
+(defvar *listener1*)
+
+(defvar *client*)
+(defvar *connection*)
+
+(deftest websocket
+  (testing "port-bind-error-handle"
+    (progn
+      (setq *server* (make-instance 'jsonrpc:websocket-server :url *ws-url*))
+      (setq *listener* (bt:make-thread (lambda () (jsonrpc:transport-listen *server*))))
+      (sleep 0.1)
+      
+      ;; (jsonrpc:transport-listen *server*)
+      ;; USOCKET:ADDRESS-IN-USE-ERROR
+      (ok (signals (jsonrpc:transport-listen *server*) 'error))
+      (sleep 0.1)
+      
+      (bt:destroy-thread *listener*)
+      (sleep 0.1)
+      
+      (setq *listener* (bt:make-thread (lambda () (jsonrpc:transport-listen *server*))))
+      (sleep 0.1)
+      (bt:destroy-thread *listener*)))
+
+  (sleep 0.5)
+  
+  (testing "connection-close-check"
+    (setq *server* (make-instance 'jsonrpc:websocket-server :url *ws-url*))
+    (jsonrpc:expose *server* "sum" (lambda (arg)
+                                     (reduce #'+ arg)))
+    (setq *listener* (bt:make-thread (lambda () (jsonrpc:transport-listen *server*))))
+    (sleep 0.1)
+
+    (setq *client* (make-instance 'jsonrpc:websocket-client :url *ws-url*))
+    (setq *connection* (jsonrpc:transport-connect *client*))
+    (sleep 0.1)
+
+    (ok (jsonrpc:alivep *connection*))
+    (ok (= 6 (jsonrpc:call *connection* "sum" '(1 2 3))))
+
+    (jsonrpc:disconnect *connection*)
+    (sleep 0.1)
+
+    (ok (null (jsonrpc:alivep *connection*)))
+    (ok (signals (jsonrpc:call *connection* "sum" '(1 2 3)) 'error))
+    (sleep 0.1)
+    ))
+
 
 (deftest etc
   (testing "basic"
-
-    (progn
-      (setq *tr* (make-instance 'jsonrpc:websocket-server :url *ws-url*))
-      (setq *thr* (bt:make-thread (lambda () (jsonrpc:transport-listen *tr*))))
-      (sleep 0.1)
-
-      ;; (jsonrpc:transport-listen *tr*)
-      ;; USOCKET:ADDRESS-IN-USE-ERROR
-      (ok (signals (jsonrpc:transport-listen *tr*) 'error))
-      (sleep 0.1)
-      
-      (bt:destroy-thread *thr*)
-      (sleep 0.1)
-      
-      (setq *thr* (bt:make-thread (lambda () (jsonrpc:transport-listen *tr*))))
-      (sleep 0.1)
-      (bt:destroy-thread *thr*)
-      )
-
-    #+nil(progn
-           (setf *tr* (make-instance 'jsonrpc:websocket-server :url *ws-url*))
-           (jsonrpc:transport-listen *tr*)
-           
-           (setf *tr1* (make-instance 'jsonrpc:websocket-server :url *ws-url*))
-           (jsonrpc:transport-listen *tr1*)
-           (slot-value *tr1* 'jsonrpc::listener)
-           
-           (sleep 0.3)
-           (jsonrpc:transport-dispose-listener *tr*)
-           
-           (sleep 0.1)
-           
-           (let ((tr1 (make-instance 'jsonrpc:websocket-server :url *ws-url*)))
-             (ok (jsonrpc:transport-listen tr1))
-             
-             (sleep 0.3)
-             (jsonrpc:transport-dispose-listener tr1))
-           
-           (sleep 0.1)
-           )
 
     (let ((port (jsonrpc::random-port)))
       (let (transport)

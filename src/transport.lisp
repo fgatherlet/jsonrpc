@@ -59,6 +59,7 @@
     (unless fn (error 'jsonrpc-method-not-found))
 
     (setq result (funcall-handler-binded fn params))
+    ;;(logd "result:~a" result)
 
     (when id (make-response :id id :result result))))
 

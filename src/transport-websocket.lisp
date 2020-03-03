@@ -25,9 +25,13 @@
     (setq processor nil)
     ))
 
-(defmethod transport-alive-connection-p ((transport websocket-transport) connectionh)
-  (and (slot-value connectionh 'io)
-       (eql (wsd:ready-state (slot-value connectionh 'io)) :open)))
+(defmethod transport-alive-connection-p ((transport websocket-transport) connection)
+  (with-slots (processor io) connection
+    (and io
+         (eql (wsd:ready-state io) :open)
+         processor
+         (bt:thread-alive-p processor)
+         )))
 
 (defun %payload-writer-websocket (connection payload)
   (let ((json (jsown:to-json payload))
