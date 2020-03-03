@@ -57,6 +57,9 @@
 
    #:*debug-on-error*
 
+   #:*loglevel*
+   #:logd
+
    ;;; base
    #:expose
    #:clear-exposed

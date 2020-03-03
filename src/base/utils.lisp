@@ -60,8 +60,13 @@
                            (error 'jsonrpc-invalid-params))))))
        (funcall ,fn ,params))))
 
+(defconstant +loglevel-debug+ 1)
+(defconstant +loglevel-info+ 2)
+(defconstant +loglevel-warn+ 3)
+(defconstant +loglevel-error+ 3)
+(defvar *loglevel* +loglevel-error+)
 (defun logd (&rest rest)
-  (format t "~&D ")
-  (apply #'format t rest)
-  (write-char #\newline))
-
+  (when (<= *loglevel* +loglevel-debug+)
+    (format t "~&D ")
+    (apply #'format t rest)
+    (write-char #\newline)))

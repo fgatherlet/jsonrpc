@@ -85,7 +85,6 @@
       (let (transport)
         (setq transport (make-instance 'jsonrpc:tcp-server :url (format nil "http://127.0.0.1:~d" port)))
         (jsonrpc:expose transport "sum" (lambda (args)
-                                          (format t ">>>>>>server. args:~a~%" args)
                                           (reduce #'+ args)
                                           ))
         (bt:make-thread (lambda () (jsonrpc:transport-listen transport))))
