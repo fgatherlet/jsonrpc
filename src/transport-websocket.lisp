@@ -133,7 +133,8 @@
                             ))))
                     :host (quri:uri-host uri)
                     :port (quri:uri-port uri)
-                    :server :hunchentoot
+                    ;;:server :hunchentoot
+                    :server :woo
                     :debug (slot-value transport 'debug)
                     :use-thread nil))
       ;; fail to laucnh or thread break
