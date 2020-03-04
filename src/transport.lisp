@@ -36,6 +36,7 @@
   (handler-bind
       ((jsonrpc-error
         (lambda (e)
+          (logd "request-to-response jsonrpc-error:~a" e)
           (return-from transport-request-to-response
             (when id
               (make-error-response
@@ -44,7 +45,7 @@
                :message (slot-value e 'message))))))
        (error
         (lambda (e &aux (e1 (make-condition 'jsonrpc-internal-error)))
-
+          (logd "request-to-response error:~a" e)
           (if *debug-on-error*
               (invoke-debugger e)
             (dissect:present e))
@@ -55,6 +56,9 @@
                :id id
                :code (slot-value e1 'code)
                :message (slot-value e1 'message)))))))
+
+    (logd "request-to-response fn:~a" fn)
+
     ;; main
     (unless fn (error 'jsonrpc-method-not-found))
 

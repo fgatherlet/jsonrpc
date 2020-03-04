@@ -5,12 +5,14 @@
   (flet ((message-js-to-payload (message-js &key (need-jsonrpc-field-p t))
            ;; message-js is jsown object.
            (if (val message-js "method")
+               ;; request
                (progn
                  (unless (valid-request-message-js-p message-js :need-jsonrpc-field-p need-jsonrpc-field-p)
                    (error 'jsonrpc-invalid-request))
                  (make-request :method (val message-js "method")
                                :params (val message-js "params")
                                :id (val message-js "id")))
+             ;; response
              (progn
                (unless (valid-response-message-js-p message-js :need-jsonrpc-field-p need-jsonrpc-field-p)
                  (error 'jsonrpc-invalid-response))

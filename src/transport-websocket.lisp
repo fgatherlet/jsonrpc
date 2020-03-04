@@ -55,8 +55,10 @@
         ;; ------------------------------
         ;; read and (enqueue request to inbox) or (dispatch response)
         (lambda (message-json)
+          ;;(logd "ws reader message-json:~a" message-json)
           (let ((payload (message-json-to-payload message-json :need-jsonrpc-field-p (slot-value transport 'need-jsonrpc-field-p))))
             (when payload
+              (logd "payload: ~s" payload)
               (chanl:send (slot-value connection 'inbox) payload)
               (connection-notify-ready connection)
               ))))
@@ -133,8 +135,8 @@
                             ))))
                     :host (quri:uri-host uri)
                     :port (quri:uri-port uri)
-                    ;;:server :hunchentoot
-                    :server :woo
+                    :server :hunchentoot
+                    ;;:server :woo
                     :debug (slot-value transport 'debug)
                     :use-thread nil))
       ;; fail to laucnh or thread break

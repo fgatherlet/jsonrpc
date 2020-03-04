@@ -113,6 +113,7 @@
                  (bt:*default-special-bindings* (append `((*connection* . ,connection))
                                                         bt:*default-special-bindings*)))
              (transport-request-to-response transport request))))
+    (logd "handle-request")
     (if (listp request)
         (mapcar #'proc request)
       (proc request))))
@@ -136,6 +137,8 @@
                   (remhash id response-callback))
               (setf (gethseash id response-map) response))))))))
 
+
+
 (defun connection-processor (connection &key payload-writer (name "processor"))
   (bt:make-thread
    (lambda ()
@@ -154,9 +157,11 @@
                     ;; TODO: should I prepare some another channel (like inbox-request, inbox-response)?
                     ;; request
                     ((typep payload 'request)
-                     (connection-enoutbox-payload
-                      connection
-                      (connection-handle-request connection payload)))
+                     (let ((response (connection-handle-request connection payload)))
+                       (logd "response:~s" response)
+                       (connection-enoutbox-payload
+                        connection
+                        response)))
                     ;; response
                     (t
                      (connection-handle-response connection payload))))
@@ -164,6 +169,7 @@
                  ;; ------------------------------
                  ;; handle outbox
                  ((chanl:recv outbox payload)
+                  (logd "request:~s" payload)
                   (funcall payload-writer connection payload))
                  ))
          )))
